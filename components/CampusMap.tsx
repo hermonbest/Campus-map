@@ -55,7 +55,6 @@ export default function CampusMap() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const { locationId } = useLocalSearchParams<{ locationId: string }>();
 
@@ -113,12 +112,12 @@ export default function CampusMap() {
     setSearchQuery('');
     setFilteredLocations([]);
 
-    // Smoothly animate map to selected location
+    // Center the map on the selected location without changing zoom
     mapRef.current?.animateToRegion({
       latitude: location.latitude,
       longitude: location.longitude,
-      latitudeDelta: LATITUDE_DELTA / 4, // Zoom in a bit more on selection
-      longitudeDelta: LONGITUDE_DELTA / 4,
+      latitudeDelta: LATITUDE_DELTA_BASE, // Use base deltas instead of zooming in
+      longitudeDelta: LATITUDE_DELTA_BASE * ASPECT_RATIO,
     }, 1000);
   };
 
@@ -172,12 +171,11 @@ export default function CampusMap() {
     );
   }
 
-  const drawerWidth = width * 0.8;
   return (
     <View style={styles.container}>
       <MapView
         ref={mapRef}
-        style={[styles.map, { backgroundColor: '#d9cfb9' }]}
+        style={[styles.map, { backgroundColor: '#e39156' }]}
         initialRegion={CAMPUS_REGION}
         provider={PROVIDER_GOOGLE}
         mapType="none"
@@ -232,14 +230,11 @@ export default function CampusMap() {
       {/* Top Header */}
       <View style={[styles.header, { top: Math.max(insets.top, 16), backgroundColor: isDark ? colors.primary : colors.surface }]}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => setIsDrawerOpen(true)} style={[styles.menuBtn, { backgroundColor: isDark ? colors.primaryContainer : colors.surfaceContainer }]}>
-            <Ionicons name="menu" size={24} color={isDark ? colors.white : colors.primary} />
-          </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? colors.white : colors.primary }]}>KUE</Text>
         </View>
-        <TouchableOpacity activeOpacity={0.8}>
-          <Image style={styles.profileImg} source={{ uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuDCwNbaQxuLcYHeqtRFTWvsos1gNiURD-Qig33v7SFHicR6POH9locLOIhwyDy-ShUvhD7riNAA1jTa4U10SqVGrcSIknIJV4u7xVxK9NQ9Ez3fSJPu9bH2LcbvhIYC6XxmQ1lU7Xm50DaoFBIPdOcRCwHwigqQ50uzQIPNFRU9ase8j7dnnpXYBP98jMbiJTI1Htse45ejG23FUk4J7Y_scUYv2Lx-wsNplyhmgatsX8OLe4UsXFN7rYp_8iKc86AV_r__ZI_Istc" }} />
-        </TouchableOpacity>
+        <View>
+          <Image style={styles.profileImg} source={require('../assets/kue_logo.png')} />
+        </View>
       </View>
 
       {/* Search Input Filter for Map (Mobile PRD style) */}
@@ -302,20 +297,20 @@ export default function CampusMap() {
           <View style={styles.infoContent}>
             <Text style={[styles.currentlyAtText, { color: colors.secondary }]}>CURRENTLY AT</Text>
             <View style={styles.infoRow}>
-              <Text style={[styles.activeTitle, { color: isDark ? colors.white : colors.primary }]} numberOfLines={1}>{selectedLocation.name}</Text>
+              <Text style={[styles.activeTitle, { color: isDark ? colors.primary : colors.white}]} numberOfLines={1}>{selectedLocation.name}</Text>
               <TouchableOpacity onPress={() => setSelectedLocation(null)}>
                 <Ionicons name="close" size={24} color={isDark ? colors.outlineVariant : colors.outline} />
               </TouchableOpacity>
             </View>
-            <Text style={[styles.activeDesc, { color: isDark ? colors.outlineVariant : colors.textMuted }]} numberOfLines={2}>
-              {selectedLocation.category.toUpperCase()} • View details and events
+            <Text style={[styles.activeDesc, { color: isDark ? colors.primary : colors.primary }]} numberOfLines={3}>
+              {selectedLocation.description || "No description available for this building."}
             </Text>
             <View style={styles.actionRow}>
               <TouchableOpacity style={[styles.navButtonPrimary, { backgroundColor: colors.primary }]} onPress={navigateToLocation}>
                 <Ionicons name="walk" size={16} color="white" />
                 <Text style={styles.navButtonText}>Navigate</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.detailsButton}
                 onPress={() => setIsDetailsOpen(true)}
               >
@@ -326,48 +321,18 @@ export default function CampusMap() {
         </View>
       )}
 
-      {/* Sidebar Drawer Modal */}
-      <Modal visible={isDrawerOpen} transparent animationType="fade">
-        <View style={styles.drawerOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setIsDrawerOpen(false)} />
-          <View style={[styles.drawerContainer, { width: drawerWidth, backgroundColor: isDark ? colors.primary : colors.surface }]}>
-            <View style={[styles.drawerHeader, { borderBottomColor: isDark ? colors.primaryContainer : colors.surfaceContainer }]}>
-              <View style={styles.drawerProfileRow}>
-                <Image style={styles.drawerProfileImg} source={{ uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuDCwNbaQxuLcYHeqtRFTWvsos1gNiURD-Qig33v7SFHicR6POH9locLOIhwyDy-ShUvhD7riNAA1jTa4U10SqVGrcSIknIJV4u7xVxK9NQ9Ez3fSJPu9bH2LcbvhIYC6XxmQ1lU7Xm50DaoFBIPdOcRCwHwigqQ50uzQIPNFRU9ase8j7dnnpXYBP98jMbiJTI1Htse45ejG23FUk4J7Y_scUYv2Lx-wsNplyhmgatsX8OLe4UsXFN7rYp_8iKc86AV_r__ZI_Istc" }} />
-                <View>
-                  <Text style={[styles.drawerProfileName, { color: isDark ? colors.white : colors.primary }]}>Academic Profile</Text>
-                  <Text style={styles.drawerProfileSub}>Class of 2025</Text>
-                </View>
-              </View>
-            </View>
-            <View style={styles.drawerLinks}>
-              {[
-                { icon: 'calendar', label: 'My Schedule' },
-                { icon: 'library', label: 'Library' },
-                { icon: 'people', label: 'Directory' },
-                { icon: 'settings', label: 'Settings' }
-              ].map(l => (
-                <TouchableOpacity activeOpacity={0.6} key={l.label} style={[styles.drawerLinkItem, { borderBottomColor: isDark ? colors.primaryContainer : colors.surfaceContainer }]}>
-                  <Ionicons name={l.icon as any} size={20} color={isDark ? colors.white : colors.text} opacity={0.7} />
-                  <Text style={[styles.drawerLinkText, { color: isDark ? colors.white : colors.text }]}>{l.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Building Details Modal */}
       <Modal visible={isDetailsOpen} transparent animationType="slide">
         <View style={styles.detailsOverlay}>
-          <TouchableOpacity 
-            style={styles.detailsBackdrop} 
-            activeOpacity={1} 
-            onPress={() => setIsDetailsOpen(false)} 
+          <TouchableOpacity
+            style={styles.detailsBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsDetailsOpen(false)}
           />
           <View style={[styles.detailsSheet, { backgroundColor: isDark ? colors.surfaceContainerLowest : colors.white }]}>
             <View style={styles.detailsHandle} />
-            
+
             {selectedLocation && (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailsScroll}>
                 <View style={styles.detailsHeader}>
@@ -386,8 +351,8 @@ export default function CampusMap() {
                 </View>
 
                 {selectedLocation.imageUrl && (
-                  <Image 
-                    source={{ uri: selectedLocation.imageUrl }} 
+                  <Image
+                    source={{ uri: selectedLocation.imageUrl }}
                     style={styles.detailsImage}
                     resizeMode="cover"
                   />
@@ -439,7 +404,7 @@ export default function CampusMap() {
 
                 <View style={styles.contactRow}>
                   {selectedLocation.phone && (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={[styles.contactBtn, { backgroundColor: colors.primaryContainer }]}
                       onPress={() => Linking.openURL(`tel:${selectedLocation.phone}`)}
                     >
@@ -448,7 +413,7 @@ export default function CampusMap() {
                     </TouchableOpacity>
                   )}
                   {selectedLocation.website && (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={[styles.contactBtn, { backgroundColor: colors.secondaryContainer }]}
                       onPress={() => Linking.openURL(selectedLocation.website!)}
                     >
@@ -479,6 +444,7 @@ export default function CampusMap() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#e39156',
   },
   map: {
     ...StyleSheet.absoluteFillObject,

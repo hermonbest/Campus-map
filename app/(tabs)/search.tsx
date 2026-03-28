@@ -43,12 +43,9 @@ export default function SearchScreen() {
       {/* Top Header */}
       <View style={[styles.header, { backgroundColor: isDark ? colors.primary : colors.surface, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity activeOpacity={0.7} style={[styles.menuBtn, { backgroundColor: isDark ? colors.primaryContainer : colors.surfaceContainer }]}>
-            <Ionicons name="menu" size={24} color={isDark ? colors.white : colors.primary} />
-          </TouchableOpacity>
           <Text style={[styles.title, { color: isDark ? colors.white : colors.primary }]}>KUE </Text>
         </View>
-        <Image style={styles.profileImg} source={{ uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuDCwNbaQxuLcYHeqtRFTWvsos1gNiURD-Qig33v7SFHicR6POH9locLOIhwyDy-ShUvhD7riNAA1jTa4U10SqVGrcSIknIJV4u7xVxK9NQ9Ez3fSJPu9bH2LcbvhIYC6XxmQ1lU7Xm50DaoFBIPdOcRCwHwigqQ50uzQIPNFRU9ase8j7dnnpXYBP98jMbiJTI1Htse45ejG23FUk4J7Y_scUYv2Lx-wsNplyhmgatsX8OLe4UsXFN7rYp_8iKc86AV_r__ZI_Istc" }} />
+        <Image style={styles.profileImg} source={require('../../assets/kue_logo.png')} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

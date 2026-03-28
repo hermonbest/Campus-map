@@ -13,7 +13,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.tabBarContainer, { backgroundColor: isDark ? 'rgba(0, 10, 30, 0.8)' : 'rgba(248, 249, 250, 0.8)', paddingBottom: Math.max(insets.bottom, 16) }]}>
+    <View style={[styles.tabBarContainer, { backgroundColor: isDark ? colors.primary : colors.white, paddingBottom: Math.max(insets.bottom, 16) }]}>
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];
         const isFocused = state.index === index;

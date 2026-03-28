@@ -46,3 +46,9 @@ Issue: useState not defined in screen component.
 Root Cause: Adding state hooks to a file without adding 'useState' to the React imports.
 Fix: Added useState to the 'react' imports.
 New Rule: When adding state to an existing component, remember to update the React import to include 'useState'.
+
+Date: 2026-03-28
+Issue: Standard React imports (useState, useEffect, etc.) were accidentally deleted during header refactoring.
+Root Cause: Replacing the entire top section of a file with new imports without ensuring all existing ones were included.
+Fix: Restored React imports and ensured any header cleanup preserves existing framework dependencies.
+New Rule: When refactoring file headers or imports, always verify that core framework imports like React hooks are preserved to avoid breaking the component's state and effects.

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, TextInput, Dimensions, FlatList, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, TextInput, Dimensions, Keyboard } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { colors } from '../../styles/tokens';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBuildings } from '../../hooks/useBuildings';
 import { useState } from 'react';
+import { searchCampus, SearchResult } from '../../lib/api';
 
 const { width } = Dimensions.get('window');
 
@@ -13,28 +14,50 @@ export default function SearchScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const router = useRouter();
-  const { buildings, loading } = useBuildings();
+  const { buildings, loading: buildingsLoading, refresh } = useBuildings();
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredResults, setFilteredResults] = useState<any[]>([]);
+  const [filteredResults, setFilteredResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const handleSearch = (text: string) => {
+  const handleSearch = async (text: string) => {
     setSearchQuery(text);
     if (text.trim().length > 0) {
-      const filtered = buildings.filter(b =>
-        b.name.toLowerCase().includes(text.toLowerCase()) ||
-        b.category.toLowerCase().includes(text.toLowerCase())
-      );
-      setFilteredResults(filtered);
+      setIsSearching(true);
+      try {
+        const results = await searchCampus(text);
+        setFilteredResults(results);
+      } catch (error) {
+        // Quietly fall back to local building search if offline
+        if (buildings) {
+          const local = buildings.filter((loc) =>
+            loc.name.toLowerCase().includes(text.toLowerCase())
+          );
+          setFilteredResults(local.map(b => ({
+            id: b.id,
+            name: b.name,
+            type: 'building',
+            category: b.category,
+            icon: b.icon,
+            description: b.description,
+            buildingId: b.id
+          })));
+        }
+      } finally {
+        setIsSearching(false);
+      }
     } else {
       setFilteredResults([]);
     }
   };
 
-  const onSelectLocation = (id: string) => {
+  const onSelectLocation = (item: SearchResult) => {
     Keyboard.dismiss();
     router.push({
       pathname: '/',
-      params: { locationId: id }
+      params: {
+        locationId: item.buildingId,
+        focusOffice: item.type === 'office' ? item.name : undefined
+      }
     });
   };
 
@@ -44,6 +67,25 @@ export default function SearchScreen() {
       <View style={[styles.header, { backgroundColor: isDark ? colors.primary : colors.surface, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
         <View style={styles.headerLeft}>
           <Text style={[styles.title, { color: isDark ? colors.white : colors.primary }]}>KUE </Text>
+          {__DEV__ && (
+            <TouchableOpacity 
+              onPress={async () => {
+                try {
+                  await refresh();
+                  import('react-native-toast-message').then(Toast => Toast.default.show({
+                    type: 'success',
+                    text1: 'Data synced for dev',
+                    position: 'bottom',
+                  }));
+                } catch (e) {
+                  console.warn("Dev sync failed:", e);
+                }
+              }}
+              style={{ marginLeft: 8, padding: 4 }}
+            >
+              <Ionicons name="sync-outline" size={16} color={isDark ? colors.white : colors.primary} />
+            </TouchableOpacity>
+          )}
         </View>
         <Image style={styles.profileImg} source={require('../../assets/kue_logo.png')} />
       </View>
@@ -66,13 +108,18 @@ export default function SearchScreen() {
             <View style={[styles.resultsList, { backgroundColor: isDark ? colors.surfaceContainerLow : colors.surfaceContainerLowest }]}>
               {filteredResults.map((item) => (
                 <TouchableOpacity
-                  key={item.id}
+                  key={`${item.type}-${item.id}`}
                   style={[styles.resultItem, { borderBottomColor: 'rgba(0,0,0,0.05)' }]}
-                  onPress={() => onSelectLocation(item.id)}
+                  onPress={() => onSelectLocation(item)}
                 >
-                  <View>
-                    <Text style={[styles.resultName, { color: colors.text }]}>{item.name}</Text>
-                    <Text style={[styles.resultCategory, { color: colors.textMuted }]}>{item.category.toUpperCase()}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View style={[styles.resultIconContainer, { backgroundColor: isDark ? colors.surfaceContainerHigh : colors.surfaceContainerHighest }]}>
+                      <Text style={{ fontSize: 18 }}>{item.icon}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.resultName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+                      <Text style={[styles.resultCategory, { color: colors.textMuted }]} numberOfLines={1}>{item.category.toUpperCase()}</Text>
+                    </View>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.outline} />
                 </TouchableOpacity>
@@ -80,9 +127,15 @@ export default function SearchScreen() {
             </View>
           )}
 
-          {searchQuery.length > 0 && filteredResults.length === 0 && (
+          {searchQuery.length > 0 && filteredResults.length === 0 && !isSearching && (
             <View style={styles.noResults}>
-              <Text style={{ color: colors.textMuted, fontFamily: 'Inter_500Medium' }}>No landmarks found</Text>
+              <Text style={{ color: colors.textMuted, fontFamily: 'Inter_500Medium' }}>No results found</Text>
+            </View>
+          )}
+
+          {isSearching && (
+            <View style={styles.noResults}>
+              <Text style={{ color: colors.textMuted, fontFamily: 'Inter_500Medium' }}>Searching...</Text>
             </View>
           )}
 
@@ -307,6 +360,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.5,
+  },
+  resultIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   noResults: {
     marginTop: 32,

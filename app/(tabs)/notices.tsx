@@ -127,6 +127,59 @@ export default function NoticesScreen() {
         {/* Gap at bottom for nav bar */}
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Notice Detail Modal */}
+      <Modal visible={isModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsModalOpen(false)}
+          />
+          <View style={[styles.modalSheet, { backgroundColor: isDark ? colors.surfaceContainerLow : colors.white }]}>
+            <View style={styles.modalHandle} />
+            {selectedNotice && (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
+                <View style={[styles.badge, { alignSelf: 'flex-start', marginBottom: 16 }]}>
+                  <Text style={styles.badgeText}>{selectedNotice.type.toUpperCase()}</Text>
+                </View>
+                <Text style={[styles.modalDate, { color: colors.outline }]}>{formatDate(selectedNotice.date)}</Text>
+                <Text style={[styles.modalTitle, { color: isDark ? colors.white : colors.primary }]}>
+                  {selectedNotice.title}
+                </Text>
+                
+                <View style={styles.authorBadge}>
+                  <Ionicons name="person-circle-outline" size={20} color={colors.secondary} />
+                  <Text style={[styles.authorText, { color: isDark ? 'rgba(255,255,255,0.6)' : colors.textMuted }]}>
+                    POSTED BY {selectedNotice.author.toUpperCase()}
+                  </Text>
+                </View>
+
+                {selectedNotice.imageUrl && (
+                  <Image
+                    source={{ uri: selectedNotice.imageUrl }}
+                    style={styles.modalImage}
+                    resizeMode="cover"
+                  />
+                )}
+
+                <Text style={[styles.modalContent, { color: isDark ? colors.outlineVariant : colors.text }]}>
+                  {selectedNotice.content}
+                </Text>
+                
+                <TouchableOpacity 
+                   style={{ marginTop: 40, paddingVertical: 16, backgroundColor: colors.primary, borderRadius: 16, alignItems: 'center' }}
+                   onPress={() => setIsModalOpen(false)}
+                >
+                   <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>Close Announcement</Text>
+                </TouchableOpacity>
+
+                <View style={{ height: 40 }} />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

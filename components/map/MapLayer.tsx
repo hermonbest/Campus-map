@@ -27,7 +27,7 @@ export default function MapLayer({
   return (
     <MapView
       ref={mapRef}
-      style={[styles.map, { backgroundColor: '#cd934dff' }]}
+      style={[styles.map, { backgroundColor: '#4CAF50ff' }]}
       initialRegion={initialRegion}
       provider={PROVIDER_GOOGLE}
       mapType="standard"

@@ -131,6 +131,7 @@ export default function CampusMap() {
   const selectLocation = (location: LocationData) => {
     Keyboard.dismiss(); // Clean up the UI
     setSelectedLocation(location);
+    setIsDetailsOpen(true); // Auto-open details sheet
     setSearchQuery('');
     setSearchResults([]);
 

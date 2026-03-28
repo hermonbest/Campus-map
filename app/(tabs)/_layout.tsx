@@ -1,52 +1,108 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
-
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { colors } from '../../styles/tokens';
+import { Ionicons } from '@expo/vector-icons';
+import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function TabLayout() {
+function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
 
   return (
+    <View style={[styles.tabBarContainer, { backgroundColor: isDark ? 'rgba(0, 10, 30, 0.8)' : 'rgba(248, 249, 250, 0.8)', paddingBottom: Math.max(insets.bottom, 16) }]}>
+      {state.routes.map((route, index) => {
+        const { options } = descriptors[route.key];
+        const isFocused = state.index === index;
+
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+          }
+        };
+
+        const iconName = route.name === 'index' ? 'map' : route.name === 'notices' ? 'notifications' : 'search';
+        const label = route.name === 'index' ? 'Map' : route.name === 'notices' ? 'Notices' : 'Search';
+
+        if (isFocused) {
+          return (
+             <TouchableOpacity key={route.key} onPress={onPress} activeOpacity={0.8} style={[styles.fabTab, { backgroundColor: isDark ? colors.secondaryContainer : colors.primary }]}>
+                <Ionicons name={iconName} size={24} color={isDark ? colors.primary : colors.white} />
+             </TouchableOpacity>
+          );
+        }
+
+        return (
+          <TouchableOpacity key={route.key} onPress={onPress} activeOpacity={0.6} style={styles.tabItem}>
+            <Ionicons name={iconName} size={24} color={isDark ? colors.white : colors.text} opacity={0.6} />
+            <Text style={[styles.tabLabel, { color: isDark ? colors.white : colors.text, opacity: 0.6 }]}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+export default function TabLayout() {
+  return (
     <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        headerShown: true,
-        tabBarButton: HapticTab,
-        tabBarStyle: Platform.select({
-          ios: {
-            // Use a transparent background on iOS to show the blur effect
-            position: 'absolute',
-          },
-          default: {},
-        }),
+        headerShown: false,
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          headerShown: false,
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="gear" color={color} />,
-        }}
-      />
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="notices" />
+      <Tabs.Screen name="search" />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingTop: 16,
+    zIndex: 50,
+  },
+  tabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    width: 64,
+  },
+  fabTab: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+  },
+  tabLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 4,
+  }
+});

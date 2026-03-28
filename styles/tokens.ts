@@ -1,18 +1,28 @@
 export const colors = {
-  primary: '#2563EB', // blue-600
-  primaryDark: '#1D4ED8', // blue-700
-  secondary: '#64748B', // slate-500
-  background: '#FFFFFF',
-  surface: '#F8FAFC', // slate-50
-  text: '#0F172A', // slate-900
-  textMuted: '#64748B', // slate-500
-  border: '#E2E8F0', // slate-200
-  white: '#FFFFFF',
+  primary: '#000a1e',
+  secondary: '#735c00',
+  tertiary: '#000b1d',
+  background: '#f8f9fa',
+  surface: '#f8f9fa',
+  surfaceContainer: '#edeeef',
+  surfaceContainerLow: '#f3f4f5',
+  surfaceContainerLowest: '#ffffff',
+  surfaceContainerHigh: '#e7e8e9',
+  surfaceContainerHighest: '#e1e3e4',
+  text: '#191c1d', // on-surface
+  textMuted: '#44474e', // on-surface-variant
+  outline: '#74777f',
+  outlineVariant: '#c4c6cf',
+  border: '#c4c6cf',
+  white: '#ffffff',
   black: '#000000',
-  success: '#16A34A', // green-600
-  error: '#DC2626', // red-600
-  warning: '#CA8A04', // yellow-600
-  info: '#2563EB', // blue-600
+  primaryContainer: '#002147',
+  onPrimaryContainer: '#708ab5',
+  secondaryContainer: '#fed65b',
+  onSecondaryContainer: '#745c00',
+  error: '#ba1a1a',
+  success: '#16A34A',
+  info: '#098af8',
 };
 
 export const spacing = {

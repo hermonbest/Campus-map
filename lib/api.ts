@@ -26,6 +26,18 @@ export interface Building {
   updatedAt: string;
 }
 
+export interface Notice {
+  id: string;
+  title: string;
+  type: string;
+  content: string;
+  author: string;
+  imageUrl?: string;
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface LocationData {
   id: string;
   name: string;
@@ -136,5 +148,23 @@ export async function fetchBuildingById(id: string): Promise<LocationData | null
   } catch (error) {
     console.error(`Error fetching building ${id} from ${API_BASE_URL}:`, error);
     throw new Error(`Network error fetching building from ${API_BASE_URL}. Verify your EXPO_PUBLIC_API_URL in .env.`);
+  }
+}
+
+/**
+ * Fetch all notices from the web-admin API
+ */
+export async function fetchNotices(): Promise<Notice[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notices`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch notices: ${response.status} ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`Error fetching notices from ${API_BASE_URL}:`, error);
+    throw new Error(`Network error fetching notices from ${API_BASE_URL}. Verify your EXPO_PUBLIC_API_URL in .env.`);
   }
 }

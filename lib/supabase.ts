@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import 'react-native-url-polyfill/auto';
 
 let client: ReturnType<typeof createClient> | null = null;
 
@@ -9,7 +10,9 @@ export function getSupabaseClient() {
   const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing Supabase environment variables. Please check your .env file.');
+    console.warn('⚠️ Missing Supabase environment variables. Please check your EAS secrets or .env file.');
+    // Provide placeholders/fail silently instead of crashing the entire app
+    return {} as ReturnType<typeof createClient>;
   }
 
   client = createClient(supabaseUrl, supabaseAnonKey, {

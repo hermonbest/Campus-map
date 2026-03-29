@@ -26,6 +26,11 @@ import { colors } from '../styles/tokens';
 
 const { width } = Dimensions.get('window');
 
+// Check for required environment variables
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const hasRequiredConfig = !!(supabaseUrl && supabaseAnonKey);
+
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
@@ -71,6 +76,21 @@ export default function RootLayout() {
     return null;
   }
 
+  // Show config error screen if environment variables are missing
+  if (!hasRequiredConfig) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Configuration Error</Text>
+        <Text style={styles.errorMessage}>
+          Missing required environment variables:{'\n\n'}
+          • EXPO_PUBLIC_SUPABASE_URL{'\n'}
+          • EXPO_PUBLIC_SUPABASE_ANON_KEY{'\n\n'}
+          Please rebuild the app with EAS environment variables set.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1 }}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -108,6 +128,26 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#F8FAFC',
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#EF4444',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: '#374151',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
   splashLogoContainer: {
     width: width * 0.6,
     height: width * 0.6,

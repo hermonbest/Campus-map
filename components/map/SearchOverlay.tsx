@@ -11,6 +11,7 @@ interface SearchOverlayProps {
   onSelectResult: (item: any) => void;
   isDark: boolean;
   topInset: number;
+  isSearching?: boolean;
 }
 
 export default function SearchOverlay({
@@ -20,10 +21,11 @@ export default function SearchOverlay({
   searchResults,
   onSelectResult,
   isDark,
-  topInset
+  topInset,
+  isSearching
 }: SearchOverlayProps) {
   return (
-    <View style={[styles.searchOverlay, { top: Math.max(topInset, 16) + 70 }]}>
+    <View style={[styles.searchOverlay, { top: Math.max(topInset, 16) + 120 }]}>
       <View style={[styles.modernSearchBox, { backgroundColor: isDark ? 'rgba(0,10,30,0.85)' : 'rgba(248,249,250,0.85)' }]}>
         <Ionicons name="search" size={20} color={isDark ? colors.white : colors.primary} style={styles.searchIcon} />
         <TextInput
@@ -33,22 +35,32 @@ export default function SearchOverlay({
           value={searchQuery}
           onChangeText={onSearchChange}
         />
-        {searchQuery.length > 0 && (
+        {searchQuery.length > 0 && !isSearching && (
           <TouchableOpacity onPress={onClearSearch}>
             <Ionicons name="close-circle" size={20} color={isDark ? colors.white : colors.outline} />
           </TouchableOpacity>
         )}
+        {isSearching && (
+          <View style={{ width: 20, height: 20, justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, color: isDark ? colors.white : colors.outline }}>...</Text>
+          </View>
+        )}
       </View>
 
       {searchResults.length > 0 && (
-        <View style={[styles.dropdown, { backgroundColor: isDark ? colors.surfaceContainerHigh : colors.surfaceContainerLowest }]}>
+        <View style={[styles.dropdown, { 
+          backgroundColor: isDark ? 'rgba(40, 50, 60, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+          borderWidth: 1,
+          borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+        }]}>
           <FlatList
             data={searchResults}
             keyExtractor={(item) => `${item.type}-${item.id}`}
             style={{ maxHeight: 250 }}
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={[styles.dropdownItem, { borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}
+                style={[styles.dropdownItem, { borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}
                 onPress={() => onSelectResult(item)}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -56,12 +68,19 @@ export default function SearchOverlay({
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.dropdownItemText, { color: isDark ? colors.white : colors.text }]} numberOfLines={1}>{item.name}</Text>
                     <Text style={[styles.dropdownItemSub, { color: isDark ? 'rgba(255,255,255,0.6)' : colors.textMuted }]} numberOfLines={1}>
-                      {item.type === 'office' ? `Office • ${item.category}` : item.category}
+                      {item.type === 'office' ? `Office • Floor ${item.floor || '?'}` : item.category}
                     </Text>
                   </View>
                 </View>
               </TouchableOpacity>
             )}
+            ListEmptyComponent={
+              <View style={{ padding: 16, alignItems: 'center' }}>
+                <Text style={{ color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)', fontSize: 14 }}>
+                  No results found
+                </Text>
+              </View>
+            }
           />
         </View>
       )}

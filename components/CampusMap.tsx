@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, useWindowDimensions, Linking, Platform, Keyboard, ActivityIndicator, Image, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, useWindowDimensions, Linking, Platform, Keyboard, ActivityIndicator, Image, Modal, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Overlay, PROVIDER_GOOGLE, Polygon } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -10,12 +10,14 @@ import { colors } from '../styles/tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { LocationData } from '../lib/api';
 import { useLocalSearchParams } from 'expo-router';
+import offlineManager from '../lib/offlineManager';
 
 // Modular Sub-components
 import MapLayer from './map/MapLayer';
 import SearchOverlay from './map/SearchOverlay';
 import BuildingSheet from './map/BuildingSheet';
 import ActiveLocationCard from './map/ActiveLocationCard';
+import OfflineIndicator from './OfflineIndicator';
 
 
 const OVERLAY_LAT_SPAN = 9.04128 - 9.03695;   // = 0.00439
@@ -65,6 +67,16 @@ export default function CampusMap() {
   const { locationId, focusOffice } = useLocalSearchParams<{ locationId: string; focusOffice?: string }>();
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (locationId && buildings.length > 0) {
@@ -102,27 +114,56 @@ export default function CampusMap() {
         CAMPUS_BOUNDARIES.northEast,
         CAMPUS_BOUNDARIES.southWest
       );
+      // Immediately focus on campus region to avoid showing world map on reload
+      mapRef.current.animateToRegion(CAMPUS_REGION, 0);
     }
   }, [mapRef.current]);
 
   const handleSearch = async (text: string) => {
+    console.log('Map search triggered:', text);
     setSearchQuery(text);
     if (text.trim() === '') {
+      setSearchResults([]);
+      return;
+    }
+    
+    // Don't search if less than 2 characters
+    if (text.trim().length < 2) {
       setSearchResults([]);
       return;
     }
 
     setIsSearching(true);
     try {
-      // Use the API search for parity with the Search tab
-      const results = await import('../lib/api').then(m => m.searchCampus(text));
-      setSearchResults(results);
+      // Check if we're offline first
+      const networkStatus = await offlineManager.getNetworkStatus();
+      console.log('Network status:', networkStatus);
+      
+      if (!networkStatus.isConnected || networkStatus.isInternetReachable === false) {
+        console.log('Offline detected, using offline search directly');
+        const { offlineSearch } = await import('../lib/api');
+        const offlineResults = await offlineSearch(text);
+        console.log('Offline results:', offlineResults.length);
+        setSearchResults(offlineResults);
+      } else {
+        // Try online search
+        const { searchCampus } = await import('../lib/api');
+        const results = await searchCampus(text);
+        console.log('Online results:', results.length);
+        setSearchResults(results);
+      }
     } catch (err) {
-      // Quietly fall back to local building filter if offline
-      const local = buildings.filter((loc) =>
-        loc.name.toLowerCase().includes(text.toLowerCase())
-      );
-      setSearchResults(local.map(b => ({ ...b, type: 'building', buildingId: b.id })));
+      // Fall back to enhanced offline search that includes offices
+      console.log('Search failed, falling back to offline search:', err);
+      try {
+        const { offlineSearch } = await import('../lib/api');
+        const offlineResults = await offlineSearch(text);
+        console.log('Fallback offline results:', offlineResults.length);
+        setSearchResults(offlineResults);
+      } catch (offlineError) {
+        console.error('Offline search failed:', offlineError);
+        setSearchResults([]);
+      }
     } finally {
       setIsSearching(false);
     }
@@ -131,7 +172,7 @@ export default function CampusMap() {
   const selectLocation = (location: LocationData) => {
     Keyboard.dismiss(); // Clean up the UI
     setSelectedLocation(location);
-    setIsDetailsOpen(true); // Auto-open details sheet
+    // Don't auto-open details sheet - let user tap ActiveLocationCard instead
     setSearchQuery('');
     setSearchResults([]);
 
@@ -224,18 +265,41 @@ export default function CampusMap() {
   }
 
   return (
-    <View style={styles.container}>
-      {/* 1. Base Map Layer */}
-      <MapLayer
-        mapRef={mapRef}
-        initialRegion={CAMPUS_REGION}
-        mapStyle={mapStyle}
-        overlayBounds={OVERLAY_BOUNDS}
-        buildings={buildings}
-        selectedLocation={selectedLocation}
-        userLocation={userLocation}
-        onSelectLocation={selectLocation}
-      />
+    <ScrollView 
+      style={styles.container}
+      contentContainerStyle={{ flexGrow: 1 }}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
+        />
+      }
+    >
+      <View style={styles.contentWrapper}>
+        {/* Offline Indicator */}
+        <OfflineIndicator />
+        
+        {/* Header with KUE branding */}
+        <View style={[styles.header, { backgroundColor: isDark ? colors.primary : colors.surface, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
+          <View style={styles.headerLeft}>
+            <Text style={[styles.title, { color: isDark ? colors.white : colors.primary }]}>KUE Map</Text>
+          </View>
+          <Image style={styles.profileImg} source={require('../assets/kue_logo.png')} />
+        </View>
+
+        {/* 1. Base Map Layer */}
+        <MapLayer
+          mapRef={mapRef}
+          initialRegion={CAMPUS_REGION}
+          mapStyle={mapStyle}
+          overlayBounds={OVERLAY_BOUNDS}
+          buildings={buildings}
+          selectedLocation={selectedLocation}
+          userLocation={userLocation}
+          onSelectLocation={selectLocation}
+        />
 
       {/* 2. Top Search & Filter UI */}
       <SearchOverlay
@@ -246,6 +310,7 @@ export default function CampusMap() {
         onSelectResult={selectSearchResult}
         isDark={isDark}
         topInset={insets.top}
+        isSearching={isSearching}
       />
 
 
@@ -269,40 +334,22 @@ export default function CampusMap() {
       />
 
       {/* 5. Map Control Buttons */}
-      <View style={[styles.controlButtons, { bottom: height * 0.28 + 100 }]}>
-        {__DEV__ && (
-          <TouchableOpacity
-            style={[styles.controlButton, { backgroundColor: colors.secondaryContainer }]}
-            onPress={async () => {
-              try {
-                await refresh();
-                import('react-native-toast-message').then(Toast => Toast.default.show({
-                  type: 'success',
-                  text1: 'Data refreshed!',
-                  position: 'bottom',
-                }));
-              } catch (e) {
-                console.warn("Manual refresh failed:", e);
-              }
-            }}
-          >
-            <Ionicons name="cloud-download" size={24} color={colors.onSecondaryContainer} />
-          </TouchableOpacity>
-        )}
+      <View style={[styles.controlButtons, { bottom: height * 0.28 + 80 }]}>
         <TouchableOpacity
-          style={[styles.controlButton, { backgroundColor: isDark ? colors.surfaceContainerHigh : colors.surfaceContainerLowest }]}
+          style={[styles.controlButton, { backgroundColor: colors.primary }]}
           onPress={recenterMap}
         >
-          <Ionicons name="contract" size={24} color={isDark ? colors.white : colors.primary} />
+          <Ionicons name="contract" size={20} color={colors.white} />
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.controlButton, { backgroundColor: isDark ? colors.surfaceContainerHigh : colors.surfaceContainerLowest }]}
+          style={[styles.controlButton, { backgroundColor: colors.primary }]}
           onPress={centerOnUser}
         >
-          <Ionicons name="navigate" size={24} color={isDark ? colors.white : colors.primary} />
+          <Ionicons name="navigate" size={20} color={colors.white} />
         </TouchableOpacity>
       </View>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -310,6 +357,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000ff',
+  },
+  contentWrapper: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    zIndex: 50,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  title: {
+    fontSize: 18,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: -0.5,
+  },
+  profileImg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#e1e3e4',
   },
   loadingContainer: {
     flex: 1,
@@ -356,15 +431,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   controlButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowRadius: 6,
+    elevation: 6,
   },
 });

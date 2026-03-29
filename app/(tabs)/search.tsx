@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBuildings } from '../../hooks/useBuildings';
 import { useState } from 'react';
-import { searchCampus, SearchResult } from '../../lib/api';
+import { searchCampus, SearchResult, offlineSearch, getCachedBuildings, getCachedOffices } from '../../lib/api';
 
 const { width } = Dimensions.get('window');
 
@@ -18,35 +18,72 @@ export default function SearchScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredResults, setFilteredResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Define category order and filter from actual buildings
+  const definedOrder = ['academic', 'administrative', 'library', 'dormitory', 'dining', 'health'];
+  
+  // Get available categories from buildings and sort by defined order
+  const availableCategories = [...new Set(buildings.map(b => b.category.toLowerCase()))];
+  const orderedCategories = definedOrder.filter(cat => availableCategories.includes(cat));
+  // Add any remaining categories not in defined order
+  const remainingCategories = availableCategories.filter(cat => !definedOrder.includes(cat));
+  const categories = ['All', ...orderedCategories, ...remainingCategories];
+  
+  // Filter buildings by selected category
+  const filteredBuildings = selectedCategory && selectedCategory !== 'All' 
+    ? buildings.filter(b => b.category.toLowerCase() === selectedCategory.toLowerCase())
+    : buildings;
+
+  // Debug function to test cache
+  const testCache = async () => {
+    console.log('Testing cache...');
+    const buildings = await getCachedBuildings();
+    const offices = await getCachedOffices();
+    console.log('Cache test results:', {
+      buildingsCount: buildings?.length || 0,
+      officesCount: offices?.length || 0,
+      sampleBuilding: buildings?.[0],
+      sampleOffice: offices?.[0]
+    });
+  };
 
   const handleSearch = async (text: string) => {
     setSearchQuery(text);
-    if (text.trim().length > 0) {
-      setIsSearching(true);
-      try {
-        const results = await searchCampus(text);
-        setFilteredResults(results);
-      } catch (error) {
-        // Quietly fall back to local building search if offline
-        if (buildings) {
-          const local = buildings.filter((loc) =>
-            loc.name.toLowerCase().includes(text.toLowerCase())
-          );
-          setFilteredResults(local.map(b => ({
-            id: b.id,
-            name: b.name,
-            type: 'building',
-            category: b.category,
-            icon: b.icon,
-            description: b.description,
-            buildingId: b.id
-          })));
-        }
-      } finally {
-        setIsSearching(false);
-      }
-    } else {
+    if (text.trim().length === 0) {
       setFilteredResults([]);
+      setIsOfflineMode(false);
+      return;
+    }
+    
+    // Don't search if less than 2 characters (except when clearing)
+    if (text.trim().length < 2) {
+      setFilteredResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      const results = await searchCampus(text);
+      setFilteredResults(results);
+      setIsOfflineMode(false);
+      console.log('Online search results:', results.length);
+    } catch (error) {
+      // Fall back to enhanced offline search
+      console.log('API search failed, using offline search with offices');
+      try {
+        const offlineResults = await offlineSearch(text);
+        setFilteredResults(offlineResults);
+        setIsOfflineMode(true);
+        console.log('Offline search returned:', offlineResults.length, 'results');
+      } catch (offlineError) {
+        console.error('Offline search also failed:', offlineError);
+        setFilteredResults([]);
+        setIsOfflineMode(true);
+      }
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -66,26 +103,7 @@ export default function SearchScreen() {
       {/* Top Header */}
       <View style={[styles.header, { backgroundColor: isDark ? colors.primary : colors.surface, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
         <View style={styles.headerLeft}>
-          <Text style={[styles.title, { color: isDark ? colors.white : colors.primary }]}>KUE </Text>
-          {__DEV__ && (
-            <TouchableOpacity 
-              onPress={async () => {
-                try {
-                  await refresh();
-                  import('react-native-toast-message').then(Toast => Toast.default.show({
-                    type: 'success',
-                    text1: 'Data synced for dev',
-                    position: 'bottom',
-                  }));
-                } catch (e) {
-                  console.warn("Dev sync failed:", e);
-                }
-              }}
-              style={{ marginLeft: 8, padding: 4 }}
-            >
-              <Ionicons name="sync-outline" size={16} color={isDark ? colors.white : colors.primary} />
-            </TouchableOpacity>
-          )}
+          <Text style={[styles.title, { color: isDark ? colors.white : colors.primary }]}>KUE Search</Text>
         </View>
         <Image style={styles.profileImg} source={require('../../assets/kue_logo.png')} />
       </View>
@@ -103,6 +121,13 @@ export default function SearchScreen() {
               onChangeText={handleSearch}
             />
           </View>
+
+          {isOfflineMode && searchQuery.length > 0 && (
+            <View style={[styles.offlineIndicator, { backgroundColor: isDark ? 'rgba(255,152,0,0.2)' : 'rgba(255,152,0,0.1)' }]}>
+              <Ionicons name="alert-circle" size={16} color="#ff9800" />
+              <Text style={[styles.offlineText, { color: '#ff9800' }]}>Offline Mode - Limited Results</Text>
+            </View>
+          )}
 
           {searchQuery.length > 0 && filteredResults.length > 0 && (
             <View style={[styles.resultsList, { backgroundColor: isDark ? colors.surfaceContainerLow : colors.surfaceContainerLowest }]}>
@@ -141,46 +166,68 @@ export default function SearchScreen() {
 
           {searchQuery.length === 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
-              <View style={[styles.filterChip, styles.filterChipActive]}>
-                <Text style={styles.filterChipActiveText}>Buildings</Text>
-              </View>
-              {['Events', 'Services', 'Faculties', 'Spaces'].map(cat => (
-                <View key={cat} style={[styles.filterChip, { backgroundColor: isDark ? colors.surfaceContainerHigh : colors.surfaceContainerHighest }]}>
-                  <Text style={{ color: colors.text, fontSize: 14, fontFamily: 'Inter_500Medium' }}>{cat}</Text>
-                </View>
+              {categories.map((cat) => (
+                <TouchableOpacity 
+                  key={cat}
+                  onPress={() => setSelectedCategory(cat === 'All' ? null : cat)}
+                  style={[
+                    styles.filterChip, 
+                    (cat === 'All' ? selectedCategory === null : selectedCategory === cat) 
+                      ? styles.filterChipActive 
+                      : { backgroundColor: isDark ? colors.surfaceContainerHigh : colors.surfaceContainerHighest }
+                  ]}
+                >
+                  <Text style={
+                    (cat === 'All' ? selectedCategory === null : selectedCategory === cat) 
+                      ? styles.filterChipActiveText 
+                      : { color: colors.text, fontSize: 14, fontFamily: 'Inter_500Medium' }
+                  }>{cat.charAt(0).toUpperCase() + cat.slice(1)}</Text>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           )}
         </View>
 
-        {/* Recent & Trending */}
-        <View style={styles.recentSection}>
-          <Text style={[styles.sectionHeading, { color: colors.outline }]}>RECENT SEARCHES</Text>
-          <View style={styles.recentList}>
-            {['Main Library Level 3', 'Bio-Engineering Dept.', 'Student Union Café'].map((item) => (
-              <TouchableOpacity key={item} style={styles.recentItem}>
-                <Ionicons name="time-outline" size={18} color={'rgba(0,0,0,0.4)'} />
-                <Text style={[styles.recentText, { color: colors.text }]}>{item}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Discovery Card */}
-        <View style={{ marginTop: 24, marginBottom: 120 }}>
-          <Text style={[styles.sectionHeading, { color: colors.outline }]}>CURATED FOR YOU</Text>
-          <TouchableOpacity activeOpacity={0.9} style={styles.discoverCard}>
-            <Image style={styles.discoverImage} source={{ uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuDvRew7f225xNxDDk3lsdesvCJMKDHXmJ5kUQ7Ny6lpQBQA3wp82Lm6SSBIHDzpL3wHVr5piQswoBhwmmdN8NMJnhOvgZDbXDlH9o1pInjr6266-BYVWv65MTRc8IH6Zb2Mr9jRGe3Se7sP3RrML83oox9BNmYwu3R29YHRjc4QPv_VLtEKQKuIS7502-Fy65A8Uw77YhRd-6aH-tI31-MmfpopgVqpRZ0XwFANJpl2JVgj2JBrxgmxf7SBS-rCjGVM-_TClfguLWY" }} />
-            <View style={styles.discoverOverlay} />
-            <View style={styles.discoverContent}>
-              <View style={styles.discoverBadge}>
-                <Text style={styles.discoverBadgeText}>FEATURED</Text>
-              </View>
-              <Text style={styles.discoverTitle}>School of Visual Arts</Text>
-              <Text style={styles.discoverDesc}>Explore the new digital media galleries.</Text>
+        {/* Building Directory - Show when no search */}
+        {searchQuery.length === 0 && filteredBuildings.length > 0 && (
+          <View style={styles.buildingsSection}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              📍 {selectedCategory || 'All'} Buildings ({filteredBuildings.length})
+            </Text>
+            <View style={styles.buildingsGrid}>
+              {filteredBuildings.map((building) => (
+                <TouchableOpacity
+                  key={building.id}
+                  style={[styles.buildingCard, { 
+                    backgroundColor: isDark ? colors.surfaceContainerHigh : colors.surfaceContainerLowest,
+                  }]}
+                  onPress={() => onSelectLocation({
+                    id: building.id,
+                    name: building.name,
+                    type: 'building',
+                    category: building.category,
+                    icon: building.icon,
+                    description: building.description,
+                    buildingId: building.id
+                  })}
+                >
+                  <Text style={{ fontSize: 32, marginBottom: 8, color: isDark ? colors.white : colors.text }}>{building.icon}</Text>
+                  <Text style={[styles.buildingName, { color: colors.text }]} numberOfLines={2}>
+                    {building.name}
+                  </Text>
+                  <Text style={[styles.buildingCategory, { color: colors.textMuted }]}>
+                    {building.category}
+                  </Text>
+                  {building.offices && building.offices.length > 0 && (
+                    <View style={styles.officeCountBadge}>
+                      <Text style={styles.officeCountText}>{building.offices.length} offices</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
             </View>
-          </TouchableOpacity>
-        </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -371,5 +418,67 @@ const styles = StyleSheet.create({
   noResults: {
     marginTop: 32,
     alignItems: 'center',
-  }
+  },
+  offlineIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  offlineText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  buildingsSection: {
+    marginTop: 24,
+    marginBottom: 32,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+    marginBottom: 16,
+    marginLeft: 4,
+  },
+  buildingsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  buildingCard: {
+    width: '47%',
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buildingName: {
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  buildingCategory: {
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  officeCountBadge: {
+    backgroundColor: colors.primaryContainer,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  officeCountText: {
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    color: colors.onPrimaryContainer,
+  },
 });

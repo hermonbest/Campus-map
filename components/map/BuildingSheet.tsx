@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/styles/tokens';
 import { LocationData } from '@/lib/api';
+import { getCachedImageSource } from '@/lib/imageCache';
 
 interface BuildingSheetProps {
   isVisible: boolean;
@@ -13,6 +14,16 @@ interface BuildingSheetProps {
 }
 
 export default function BuildingSheet({ isVisible, onClose, selectedLocation, isDark, focusOffice }: BuildingSheetProps) {
+  const [imageSource, setImageSource] = useState<any>(null);
+
+  React.useEffect(() => {
+    if (selectedLocation?.imageUrl) {
+      getCachedImageSource(selectedLocation.imageUrl).then(setImageSource);
+    } else {
+      setImageSource(null);
+    }
+  }, [selectedLocation?.imageUrl]);
+
   const getCategoryIcon = (category: string): keyof typeof Ionicons.glyphMap => {
     const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
       academic: 'school',
@@ -59,10 +70,10 @@ export default function BuildingSheet({ isVisible, onClose, selectedLocation, is
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailsScroll}>
             {/* Hero Image */}
-            {selectedLocation.imageUrl && (
+            {selectedLocation.imageUrl && imageSource && (
               <View style={styles.imageContainer}>
                 <Image
-                  source={{ uri: selectedLocation.imageUrl }}
+                  source={imageSource}
                   style={styles.detailsImage}
                   resizeMode="cover"
                 />

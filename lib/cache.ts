@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CACHE_PREFIX = '@campus-map-cache:';
+const MAP_CACHE_KEY = 'map-overlay-cache';
 
 interface CacheItem<T> {
   data: T;
@@ -64,5 +65,44 @@ export async function clearCache(key: string): Promise<void> {
     await AsyncStorage.removeItem(`${CACHE_PREFIX}${key}`);
   } catch (error) {
     console.error(`Cache Error (Clear): ${key}`, error);
+  }
+}
+
+/**
+ * Save map overlay cache status
+ */
+export async function saveMapCacheStatus(): Promise<void> {
+  try {
+    const item: CacheItem<boolean> = {
+      data: true,
+      timestamp: Date.now(),
+    };
+    await AsyncStorage.setItem(`${CACHE_PREFIX}${MAP_CACHE_KEY}`, JSON.stringify(item));
+  } catch (error) {
+    console.error('Map Cache Error (Save):', error);
+  }
+}
+
+/**
+ * Check if map overlay is cached
+ */
+export async function isMapCached(): Promise<boolean> {
+  try {
+    const value = await AsyncStorage.getItem(`${CACHE_PREFIX}${MAP_CACHE_KEY}`);
+    return value !== null;
+  } catch (error) {
+    console.error('Map Cache Error (Check):', error);
+    return false;
+  }
+}
+
+/**
+ * Clear map cache
+ */
+export async function clearMapCache(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(`${CACHE_PREFIX}${MAP_CACHE_KEY}`);
+  } catch (error) {
+    console.error('Map Cache Error (Clear):', error);
   }
 }

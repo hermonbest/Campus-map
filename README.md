@@ -1,28 +1,39 @@
-# Mobile App Template 📱
+# KUE Campus Map �️
 
-A clean, modern React Native mobile app template built with Expo. This template provides a solid foundation for building mobile applications with best practices and essential features already set up.
+A mobile application for navigating the Kirirom University of Excellence (KUE) campus. Built with React Native, Expo, and Supabase for real-time data access.
 
 ## Features
 
-- ⚡ **Expo Router** - File-based routing with type-safe navigation
-- 🎨 **Design System** - Consistent colors, spacing, and typography tokens
+- 🗺️ **Interactive Campus Map** - View buildings with GPS-accurate positioning
+- 📍 **Location Services** - Real-time user location on campus
+- 🔍 **Smart Search** - Search buildings and offices with offline support
+- 📢 **Campus Notices** - Stay updated with campus announcements
+- � **Building Details** - View amenities, hours, offices, and accessibility info
 - 🌙 **Dark Mode Support** - Automatic theme switching
-- 📱 **Tab Navigation** - Bottom tab navigation with haptic feedback
-- 🎯 **TypeScript** - Full type safety throughout the app
-- 🚀 **Modern Stack** - Latest React Native and Expo features
-- 📐 **Responsive Design** - Optimized for different screen sizes
+- � **Offline Mode** - Cached data for offline navigation
+- 🚀 **Supabase Backend** - Direct cloud data fetching, no local server needed
+
+## Technical Stack
+
+- **Framework:** React Native with Expo SDK 54
+- **Navigation:** Expo Router (file-based routing)
+- **Backend:** Supabase (PostgreSQL + PostgREST)
+- **Maps:** React Native Maps
+- **Storage:** AsyncStorage for offline caching
+- **Build:** EAS Build for production APK/IPA
 
 ## Quick Start
 
-1. **Clone or copy this template**
-   ```bash
-   # If using as a template
-   npx create-expo-app --template your-template-name
-   ```
-
-2. **Install dependencies**
+1. **Install dependencies**
    ```bash
    npm install
+   ```
+
+2. **Set up environment variables**
+   ```bash
+   # .env
+   EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
    ```
 
 3. **Start development**
@@ -30,94 +41,45 @@ A clean, modern React Native mobile app template built with Expo. This template 
    npx expo start
    ```
 
-4. **Run on device/simulator**
-   - Scan QR code with Expo Go app
-   - Press `a` for Android emulator
-   - Press `i` for iOS simulator
+4. **Build for production**
+   ```bash
+   eas build --profile preview --platform android
+   ```
 
 ## Project Structure
 
 ```
-app/
-├── (tabs)/          # Tab navigation screens
-│   ├── index.tsx    # Home screen
-│   ├── profile.tsx  # Profile screen
-│   ├── settings.tsx # Settings screen
-│   └── _layout.tsx  # Tab layout configuration
-├── _layout.tsx      # Root layout with providers
-└── +not-found.tsx   # 404 screen
-
-components/
-├── ui/              # Reusable UI components
-└── ...              # Other components
-
-styles/
-└── tokens.ts        # Design system tokens
-
-types/
-└── index.ts         # TypeScript type definitions
+app/                    # Main application screens
+components/             # React components
+lib/                    # API, cache, Supabase client
+hooks/                  # Custom React hooks
+constants/              # Static data
+assets/                 # Images and fonts
 ```
 
-## Customization
+## Data Architecture
 
-### App Configuration
-Update `app.json` with your app details:
-- App name and slug
-- Bundle identifiers
-- Icons and splash screen
-- Project owner
+### Direct Supabase Integration
+The app fetches data directly from Supabase, eliminating the need for a local web-admin server.
 
-### Design System
-Modify `styles/tokens.ts` to customize:
-- Color palette
-- Typography scales
-- Spacing values
-- Border radius and shadows
+### Offline Support
+- Data caching via AsyncStorage
+- Image preloading and caching
+- Offline search functionality
+- Network status monitoring
 
-### Navigation
-Add new screens by creating files in the `app/` directory. The file-based routing will automatically create routes.
+## Recent Changes
 
-## Adding Features
+### Migration to Supabase
+- Replaced REST API calls with Supabase client
+- Direct database queries for buildings, offices, notices
+- Removed dependency on local web-admin server
 
-### New Screens
-Create new files in the `app/` directory:
-```tsx
-// app/settings.tsx
-export default function SettingsScreen() {
-  return (
-    <View>
-      <Text>Settings</Text>
-    </View>
-  );
-}
-```
-
-### New Components
-Add reusable components in the `components/` directory and import them where needed.
-
-### API Integration
-Create API service files in the `lib/` directory for data fetching and API calls.
-
-## Best Practices Included
-
-- ✅ TypeScript for type safety
-- ✅ Consistent naming conventions
-- ✅ Component-based architecture
-- ✅ Design system tokens
-- ✅ Error boundaries
-- ✅ Loading states
-- ✅ Responsive layouts
-
-## Learn More
-
-- [Expo Documentation](https://docs.expo.dev/)
-- [Expo Router Guide](https://docs.expo.dev/router/introduction/)
-- [React Native Documentation](https://reactnative.dev/)
-
-## Contributing
-
-This is a template project. Feel free to customize it for your needs!
+### Build & Deployment
+- EAS Build configuration
+- Android preview/production profiles
+- App icon and splash screen setup
 
 ## License
 
-MIT License - feel free to use this template for your projects.
+MIT License

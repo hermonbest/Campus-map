@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { fetchBuildings, LocationData, BUILDINGS_CACHE_KEY } from '../lib/api';
-import { getFromCache, saveToCache, isCacheStale } from '../lib/cache';
+import { fetchBuildings, LocationData, BUILDINGS_CACHE_KEY, extractOfficesFromBuildings, OFFICES_CACHE_KEY, Office } from '../lib/api';
+import { getFromCache, saveToCache, isCacheStale, saveMapCacheStatus } from '../lib/cache';
+import { warmBuildingImageCache } from '../lib/imageCache';
+import offlineManager from '../lib/offlineManager';
 
 const REFRESH_THRESHOLD = 600000; // 10 minutes
 
@@ -29,6 +31,20 @@ export function useBuildings(): UseBuildingsResult {
       const data = await fetchBuildings();
       setBuildings(data);
       await saveToCache(BUILDINGS_CACHE_KEY, data);
+      
+      // Cache offices separately for better offline search
+      const offices = extractOfficesFromBuildings(data);
+      await saveToCache(OFFICES_CACHE_KEY, offices);
+      
+      // Mark map as cached
+      await saveMapCacheStatus();
+      
+      // Warm image cache when online
+      if (!offlineManager.isOffline()) {
+        warmBuildingImageCache(data).catch(err => 
+          console.warn('Failed to warm image cache:', err)
+        );
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load buildings';
       
@@ -57,6 +73,12 @@ export function useBuildings(): UseBuildingsResult {
         setBuildings(cachedData);
         setLoading(false);
         
+        // Also load offices cache when loading buildings from cache
+        const cachedOffices = await getFromCache<Office[]>(OFFICES_CACHE_KEY);
+        if (cachedOffices) {
+          console.log(`Loaded ${cachedOffices.length} offices from cache`);
+        }
+        
         // Refresh silently if cache is stale
         if (await isCacheStale(BUILDINGS_CACHE_KEY, REFRESH_THRESHOLD)) {
           refreshFromServer(true);
@@ -80,7 +102,21 @@ export function useBuildings(): UseBuildingsResult {
       refreshFromServer(true);
     }, REFRESH_THRESHOLD);
     
-    return () => clearInterval(intervalId);
+    // Set up proactive cache warming when coming online
+    const unsubscribe = offlineManager.subscribeToNetworkChanges(async (status) => {
+      if (status.isConnected && status.isInternetReachable && buildings.length > 0) {
+        // When coming back online, refresh cache if stale
+        const shouldRefresh = await isCacheStale(BUILDINGS_CACHE_KEY, REFRESH_THRESHOLD);
+        if (shouldRefresh) {
+          refreshFromServer(true);
+        }
+      }
+    });
+    
+    return () => {
+      clearInterval(intervalId);
+      unsubscribe();
+    };
   }, [initData, refreshFromServer]);
 
   return {

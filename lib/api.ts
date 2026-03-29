@@ -1,5 +1,6 @@
-// The API URL should be configured via EXPO_PUBLIC_API_URL environment variable
+// Direct Supabase data fetching for Campus Map Mobile App
 import { getFromCache, saveToCache } from './cache';
+import { supabase } from './supabase';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -81,6 +82,7 @@ export interface SearchResult {
 
 export const BUILDINGS_CACHE_KEY = 'buildings-data';
 export const NOTICES_CACHE_KEY = 'notices-data';
+export const OFFICES_CACHE_KEY = 'offices-data';
 
 // Map bounds for converting percentage-based positions to GPS coordinates
 // These should match the overlay bounds in CampusMap.tsx
@@ -102,7 +104,7 @@ function positionToCoordinates(positionX: number, positionY: number): { latitude
 }
 
 /**
- * Transform web-admin Building to mobile app LocationData
+ * Transform database Building to mobile app LocationData
  */
 function transformBuilding(building: Building): LocationData {
   const { latitude, longitude } = positionToCoordinates(building.positionX, building.positionY);
@@ -138,18 +140,24 @@ function transformBuilding(building: Building): LocationData {
 }
 
 /**
- * Fetch all buildings from the web-admin API
+ * Fetch all buildings from Supabase
  */
 export async function fetchBuildings(): Promise<LocationData[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/buildings`);
+    const { data: buildings, error } = await supabase
+      .from('Building')
+      .select(`
+        *,
+        offices:Office(*)
+      `)
+      .order('createdAt', { ascending: false })
+      .order('name', { foreignTable: 'Office', ascending: true });
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch buildings: ${response.status} ${response.statusText}`);
+    if (error) {
+      throw new Error(`Failed to fetch buildings: ${error.message}`);
     }
     
-    const buildings: Building[] = await response.json();
-    const formattedBuildings = buildings.map(transformBuilding);
+    const formattedBuildings = (buildings || []).map(transformBuilding);
     
     // Save to cache in the background
     saveToCache(BUILDINGS_CACHE_KEY, formattedBuildings).catch(err => 
@@ -170,20 +178,26 @@ export async function getCachedBuildings(): Promise<LocationData[] | null> {
 }
 
 /**
- * Fetch a single building by ID
+ * Fetch a single building by ID from Supabase
  */
 export async function fetchBuildingById(id: string): Promise<LocationData | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/buildings/${id}`);
+    const { data: building, error } = await supabase
+      .from('Building')
+      .select(`
+        *,
+        offices:Office(*)
+      `)
+      .eq('id', id)
+      .single();
     
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null; // Not found
       }
-      throw new Error(`Failed to fetch building: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to fetch building: ${error.message}`);
     }
     
-    const building: Building = await response.json();
     return transformBuilding(building);
   } catch (error) {
     throw error;
@@ -191,24 +205,30 @@ export async function fetchBuildingById(id: string): Promise<LocationData | null
 }
 
 /**
- * Fetch all notices from the web-admin API
+ * Fetch all notices from Supabase
  */
 export async function fetchNotices(): Promise<Notice[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/notices`);
+    const { data: notices, error } = await supabase
+      .from('Notice')
+      .select('*')
+      .order('createdAt', { ascending: false });
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch notices: ${response.status} ${response.statusText}`);
+    if (error) {
+      throw new Error(`Failed to fetch notices: ${error.message}`);
     }
     
-    const notices: Notice[] = await response.json();
+    const formattedNotices = (notices || []).map(notice => ({
+      ...notice,
+      date: notice.date || notice.createdAt,
+    }));
     
     // Save to cache in the background
-    saveToCache(NOTICES_CACHE_KEY, notices).catch(err => 
+    saveToCache(NOTICES_CACHE_KEY, formattedNotices).catch(err => 
       console.warn('Failed to cache notices:', err)
     );
     
-    return notices;
+    return formattedNotices;
   } catch (error) {
     throw error;
   }
@@ -222,17 +242,163 @@ export async function getCachedNotices(): Promise<Notice[] | null> {
 }
 
 /**
- * Perform a global search on the web-admin API
+ * Get offices from cache
+ */
+export async function getCachedOffices(): Promise<Office[] | null> {
+  return await getFromCache<Office[]>(OFFICES_CACHE_KEY);
+}
+
+/**
+ * Extract all offices from buildings data
+ */
+export function extractOfficesFromBuildings(buildings: LocationData[]): Office[] {
+  const offices: Office[] = [];
+  buildings.forEach(building => {
+    if (building.offices) {
+      offices.push(...building.offices);
+    }
+  });
+  return offices;
+}
+
+/**
+ * Perform offline search on cached data
+ */
+export async function offlineSearch(query: string): Promise<SearchResult[]> {
+  try {
+    // Require minimum 2 characters for search
+    if (query.trim().length < 2) {
+      return [];
+    }
+    
+    console.log('Starting offline search for:', query);
+    const buildings = await getCachedBuildings();
+    const offices = await getCachedOffices();
+    const results: SearchResult[] = [];
+    
+    const searchLower = query.toLowerCase();
+    
+    console.log('Found cached data:', {
+      buildingsCount: buildings?.length || 0,
+      officesCount: offices?.length || 0
+    });
+    
+    if (buildings) {
+      const matchingBuildings = buildings.filter(building => {
+        const nameLower = building.name.toLowerCase();
+        const descLower = building.description?.toLowerCase() || '';
+        const catLower = building.category.toLowerCase();
+        
+        // Check if query matches start of word or is contained in name/description
+        const nameMatch = nameLower.includes(searchLower);
+        const descMatch = descLower.includes(searchLower);
+        const catMatch = catLower.includes(searchLower);
+        
+        return nameMatch || descMatch || catMatch;
+      });
+      
+      console.log(`Found ${matchingBuildings.length} matching buildings`);
+      
+      matchingBuildings.forEach(building => {
+        results.push({
+          id: building.id,
+          name: building.name,
+          type: 'building',
+          category: building.category,
+          icon: building.icon,
+          description: building.description,
+          buildingId: building.id
+        });
+      });
+    }
+    
+    if (offices) {
+      const matchingOffices = offices.filter(office => {
+        const nameLower = office.name.toLowerCase();
+        const descLower = office.description?.toLowerCase() || '';
+        
+        return nameLower.includes(searchLower) || descLower.includes(searchLower);
+      });
+      
+      console.log(`Found ${matchingOffices.length} matching offices`);
+      
+      matchingOffices.forEach(office => {
+        results.push({
+          id: office.id,
+          name: office.name,
+          type: 'office',
+          category: 'office',
+          icon: '🏢',
+          description: office.description || '',
+          buildingId: office.buildingId,
+          floor: office.floor
+        });
+      });
+    }
+    
+    console.log(`Returning ${results.length} total search results`);
+    return results;
+  } catch (error) {
+    console.error('Offline search failed:', error);
+    return [];
+  }
+}
+
+/**
+ * Perform a global search using Supabase
  */
 export async function searchCampus(query: string): Promise<SearchResult[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/search?query=${encodeURIComponent(query)}`);
+    // Search buildings
+    const { data: buildings, error: buildingsError } = await supabase
+      .from('Building')
+      .select('*')
+      .or(`name.ilike.%${query}%,description.ilike.%${query}%,category.ilike.%${query}%`);
     
-    if (!response.ok) {
-      throw new Error(`Failed to perform search: ${response.status} ${response.statusText}`);
+    if (buildingsError) {
+      throw new Error(`Failed to search buildings: ${buildingsError.message}`);
     }
     
-    return await response.json();
+    // Search offices
+    const { data: offices, error: officesError } = await supabase
+      .from('Office')
+      .select('*')
+      .or(`name.ilike.%${query}%,description.ilike.%${query}%`);
+    
+    if (officesError) {
+      throw new Error(`Failed to search offices: ${officesError.message}`);
+    }
+    
+    const results: SearchResult[] = [];
+    
+    // Add building results
+    (buildings || []).forEach(building => {
+      results.push({
+        id: building.id,
+        name: building.name,
+        type: 'building',
+        category: building.category,
+        icon: building.icon,
+        description: building.description,
+        buildingId: building.id
+      });
+    });
+    
+    // Add office results
+    (offices || []).forEach(office => {
+      results.push({
+        id: office.id,
+        name: office.name,
+        type: 'office',
+        category: 'office',
+        icon: '🏢',
+        description: office.description || '',
+        buildingId: office.buildingId,
+        floor: office.floor
+      });
+    });
+    
+    return results;
   } catch (error) {
     throw error;
   }

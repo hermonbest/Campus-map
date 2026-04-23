@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { fetchNotices, Notice, NOTICES_CACHE_KEY } from '../lib/api';
-import { getFromCache, saveToCache, isCacheStale } from '../lib/cache';
-import offlineManager from '../lib/offlineManager';
+import { fetchNotices, Notice, NOTICES_CACHE_KEY, getCurrentVersion, getLocalVersion, saveLocalVersion } from '../lib/api';
+import { getFromCache, saveToCache } from '../lib/cache';
 
-const REFRESH_THRESHOLD = 600000; // 10 minutes
+const REFRESH_THRESHOLD = 3600000; // 1 hour
 
 interface UseNoticesResult {
   notices: Notice[];
@@ -27,28 +26,17 @@ export function useNotices(): UseNoticesResult {
     try {
       if (!isSilent) setLoading(true);
       setError(null);
-      
-      // Check if offline before attempting fetch
-      if (offlineManager.isOffline()) {
-        console.log('Notices: Offline, skipping server fetch');
-        // If we have cached data, use it
-        const cachedData = await getFromCache<Notice[]>(NOTICES_CACHE_KEY);
-        if (cachedData && notices.length === 0) {
-          setNotices(cachedData);
-        }
-        return;
-      }
-      
+
       const data = await fetchNotices();
       setNotices(data);
       await saveToCache(NOTICES_CACHE_KEY, data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load notices';
-      
+
       // If we already have notices (from cache), this is a "background" failure
       if (notices.length > 0) {
         // Just log a warning in the background, don't show error to user
-        console.warn('Background refresh failed for notices (offline?):', errorMessage);
+        console.warn('Background refresh failed for notices:', errorMessage);
       } else {
         // Check if we have cached data to fallback to
         const cachedData = await getFromCache<Notice[]>(NOTICES_CACHE_KEY);
@@ -67,57 +55,47 @@ export function useNotices(): UseNoticesResult {
   }, [notices.length]);
 
   /**
-   * Initial data load: try cache first, then refresh if stale
+   * Initial data load: check version, use cache if available
    */
   const initData = useCallback(async () => {
+    console.log('[useNotices] Initializing data load...');
     try {
+      // Check version first
+      const serverVersion = await getCurrentVersion();
+      const localVersion = await getLocalVersion();
+      console.log(`[useNotices] Version check: server=${serverVersion}, local=${localVersion}`);
+
       const cachedData = await getFromCache<Notice[]>(NOTICES_CACHE_KEY);
-      
+
       if (cachedData) {
+        console.log(`[useNotices] Loaded ${cachedData.length} notices from cache`);
         setNotices(cachedData);
         setLoading(false);
-        
-        // Only refresh if online and cache is stale
-        if (!offlineManager.isOffline() && await isCacheStale(NOTICES_CACHE_KEY, REFRESH_THRESHOLD)) {
-          refreshFromServer(true);
+
+        // Only fetch if version changed
+        if (serverVersion !== localVersion) {
+          console.log('[useNotices] Version changed, fetching from server');
+          await refreshFromServer(false);
+          await saveLocalVersion(serverVersion);
+        } else {
+          console.log('[useNotices] Version unchanged, using cached data');
         }
       } else {
-        // No cache: only fetch if online
-        if (offlineManager.isOffline()) {
-          console.log('No cached notices and offline - will retry when online');
-          setLoading(false);
-        } else {
-          await refreshFromServer(false);
-        }
+        console.log('[useNotices] No cache found, fetching from server');
+        // No cache: perform initial direct fetch
+        await refreshFromServer(false);
+        await saveLocalVersion(serverVersion);
       }
     } catch (err) {
-      console.error('Error initializing notices data:', err);
-      // Only show error if no cached data and online
-      const cachedData = await getFromCache<Notice[]>(NOTICES_CACHE_KEY);
-      if (!cachedData && !offlineManager.isOffline()) {
-        refreshFromServer(false);
-      } else {
-        setLoading(false);
-      }
+      console.error('[useNotices] Error initializing notices data:', err);
+      // Fallback to direct fetch
+      refreshFromServer(false);
     }
   }, [refreshFromServer]);
 
   useEffect(() => {
     initData();
-    
-    // Set up network change listener to refresh when coming online
-    const unsubscribe = offlineManager.subscribeToNetworkChanges(async (status) => {
-      if (status.isConnected && status.isInternetReachable) {
-        // Just came online, refresh if stale or empty
-        const shouldRefresh = notices.length === 0 || await isCacheStale(NOTICES_CACHE_KEY, REFRESH_THRESHOLD);
-        if (shouldRefresh) {
-          refreshFromServer(true);
-        }
-      }
-    });
-    
-    return () => unsubscribe();
-  }, [initData, refreshFromServer, notices.length]);
+  }, [initData]);
 
   return {
     notices,

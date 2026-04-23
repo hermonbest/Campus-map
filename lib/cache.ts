@@ -18,8 +18,9 @@ export async function saveToCache<T>(key: string, data: T): Promise<void> {
       timestamp: Date.now(),
     };
     await AsyncStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(item));
+    console.log(`[Cache] SAVED: key="${key}" (${JSON.stringify(data).length} bytes)`);
   } catch (error) {
-    console.error(`Cache Error (Save): ${key}`, error);
+    console.error(`[Cache] ERROR (Save): ${key}`, error);
   }
 }
 
@@ -31,11 +32,14 @@ export async function getFromCache<T>(key: string): Promise<T | null> {
     const value = await AsyncStorage.getItem(`${CACHE_PREFIX}${key}`);
     if (value !== null) {
       const item: CacheItem<T> = JSON.parse(value);
+      const ageMs = Date.now() - item.timestamp;
+      console.log(`[Cache] HIT: key="${key}" age=${Math.round(ageMs/1000)}s (${Math.round(ageMs/60000)}min)`);
       return item.data;
     }
+    console.log(`[Cache] MISS: key="${key}"`);
     return null;
   } catch (error) {
-    console.error(`Cache Error (Get): ${key}`, error);
+    console.error(`[Cache] ERROR (Get): ${key}`, error);
     return null;
   }
 }
@@ -47,12 +51,19 @@ export async function getFromCache<T>(key: string): Promise<T | null> {
 export async function isCacheStale(key: string, ttl: number = 600000): Promise<boolean> {
   try {
     const value = await AsyncStorage.getItem(`${CACHE_PREFIX}${key}`);
-    if (value === null) return true;
+    if (value === null) {
+      console.log(`[Cache] STALE: key="${key}" - no cache entry`);
+      return true;
+    }
     
     const item: CacheItem<any> = JSON.parse(value);
     const now = Date.now();
-    return now - item.timestamp > ttl;
+    const ageMs = now - item.timestamp;
+    const isStale = ageMs > ttl;
+    console.log(`[Cache] AGE CHECK: key="${key}" age=${Math.round(ageMs/1000)}s, TTL=${ttl/1000}s, stale=${isStale}`);
+    return isStale;
   } catch (error) {
+    console.error(`[Cache] ERROR (Stale check): ${key}`, error);
     return true;
   }
 }
@@ -63,8 +74,9 @@ export async function isCacheStale(key: string, ttl: number = 600000): Promise<b
 export async function clearCache(key: string): Promise<void> {
   try {
     await AsyncStorage.removeItem(`${CACHE_PREFIX}${key}`);
+    console.log(`[Cache] CLEARED: key="${key}"`);
   } catch (error) {
-    console.error(`Cache Error (Clear): ${key}`, error);
+    console.error(`[Cache] ERROR (Clear): ${key}`, error);
   }
 }
 

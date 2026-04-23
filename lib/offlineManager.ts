@@ -56,52 +56,59 @@ class OfflineManager {
   /**
    * Simple network status check
    */
-  private async checkNetworkStatus() {
-    try {
-      // Simple fetch to check connectivity with timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch('https://httpbin.org/get', { 
-        method: 'HEAD',
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      const newStatus: OfflineStatus = {
-        isConnected: true,
-        isInternetReachable: response.ok,
-        connectionType: 'unknown',
-        lastChecked: Date.now(),
-      };
+   private async checkNetworkStatus() {
+     console.log('[OfflineManager] Checking network status...');
+     try {
+       // Simple fetch to check connectivity with timeout
+       const controller = new AbortController();
+       const timeoutId = setTimeout(() => controller.abort(), 5000);
+       
+       console.log('[OfflineManager] Sending HEAD request to https://httpbin.org/get');
+       const response = await fetch('https://httpbin.org/get', { 
+         method: 'HEAD',
+         signal: controller.signal
+       });
+       
+       clearTimeout(timeoutId);
+       const duration = Date.now() - (this.currentStatus.lastChecked);
+       
+       const newStatus: OfflineStatus = {
+         isConnected: true,
+         isInternetReachable: response.ok,
+         connectionType: 'unknown',
+         lastChecked: Date.now(),
+       };
 
-      if (JSON.stringify(newStatus) !== JSON.stringify(this.currentStatus)) {
-        this.currentStatus = newStatus;
-        this.notifyListeners(newStatus);
-      }
-    } catch (error) {
-      const newStatus: OfflineStatus = {
-        isConnected: false,
-        isInternetReachable: false,
-        connectionType: 'none',
-        lastChecked: Date.now(),
-      };
+       if (JSON.stringify(newStatus) !== JSON.stringify(this.currentStatus)) {
+         console.log(`[OfflineManager] Network UP - connect:${newStatus.isConnected} reachable:${newStatus.isInternetReachable} (check took ${duration}ms)`);
+         this.currentStatus = newStatus;
+         this.notifyListeners(newStatus);
+       }
+     } catch (error) {
+       const newStatus: OfflineStatus = {
+         isConnected: false,
+         isInternetReachable: false,
+         connectionType: 'none',
+         lastChecked: Date.now(),
+       };
 
-      if (JSON.stringify(newStatus) !== JSON.stringify(this.currentStatus)) {
-        this.currentStatus = newStatus;
-        this.notifyListeners(newStatus);
-      }
-    }
-  }
+       if (JSON.stringify(newStatus) !== JSON.stringify(this.currentStatus)) {
+         const errorMsg = error instanceof Error ? error.message : String(error);
+         console.log(`[OfflineManager] Network DOWN - error:`, errorMsg);
+         this.currentStatus = newStatus;
+         this.notifyListeners(newStatus);
+       }
+     }
+   }
 
-  /**
-   * Get current network status
-   */
-  async getNetworkStatus(): Promise<OfflineStatus> {
-    await this.checkNetworkStatus();
-    return this.currentStatus;
-  }
+   /**
+    * Get current network status
+    */
+   async getNetworkStatus(): Promise<OfflineStatus> {
+     await this.checkNetworkStatus();
+     console.log('[OfflineManager] Current network status:', this.currentStatus);
+     return this.currentStatus;
+   }
 
   /**
    * Subscribe to network status changes
@@ -134,22 +141,25 @@ class OfflineManager {
     });
   }
 
-  /**
-   * Get comprehensive cache status
-   */
-  async getCacheStatus(): Promise<CacheStatus> {
-    const [buildings, offices, imageStats] = await Promise.all([
-      this.getBuildingsCacheStatus(),
-      this.getOfficesCacheStatus(),
-      getCacheStats(),
-    ]);
+   /**
+    * Get comprehensive cache status
+    */
+   async getCacheStatus(): Promise<CacheStatus> {
+     console.log('[OfflineManager] Getting cache status...');
+     const [buildings, offices, imageStats] = await Promise.all([
+       this.getBuildingsCacheStatus(),
+       this.getOfficesCacheStatus(),
+       getCacheStats(),
+     ]);
 
-    return {
-      buildings,
-      offices,
-      images: imageStats,
-    };
-  }
+     const status = {
+       buildings,
+       offices,
+       images: imageStats,
+     };
+     console.log('[OfflineManager] Cache status:', status);
+     return status;
+   }
 
   /**
    * Get buildings cache status
@@ -202,30 +212,35 @@ class OfflineManager {
     }
   }
 
-  /**
-   * Clear all caches
-   */
-  async clearAllCaches(): Promise<void> {
-    try {
-      await Promise.all([
-        clearCache(BUILDINGS_CACHE_KEY),
-        clearCache(OFFICES_CACHE_KEY),
-        clearAllImageCache(),
-      ]);
-      
-      console.log('All caches cleared');
-    } catch (error) {
-      console.error('Error clearing caches:', error);
-      throw error;
-    }
-  }
+   /**
+    * Clear all caches
+    */
+   async clearAllCaches(): Promise<void> {
+     try {
+       console.log('[OfflineManager] Clearing all caches...');
+       await Promise.all([
+         clearCache(BUILDINGS_CACHE_KEY),
+         clearCache(OFFICES_CACHE_KEY),
+         clearAllImageCache(),
+       ]);
+       
+       console.log('[OfflineManager] All caches cleared');
+     } catch (error) {
+       console.error('[OfflineManager] Error clearing caches:', error);
+       throw error;
+     }
+   }
 
-  /**
-   * Check if app is in offline mode
-   */
-  isOffline(): boolean {
-    return !this.currentStatus.isConnected || this.currentStatus.isInternetReachable === false;
-  }
+   /**
+    * Check if app is in offline mode
+    */
+   isOffline(): boolean {
+     const offline = !this.currentStatus.isConnected || this.currentStatus.isInternetReachable === false;
+     if (offline) {
+       console.log('[OfflineManager] App is OFFLINE');
+     }
+     return offline;
+   }
 
   /**
    * Check if cache should be refreshed

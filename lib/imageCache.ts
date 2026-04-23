@@ -269,13 +269,17 @@ export async function isImageCached(url: string): Promise<boolean> {
  * Warm cache with building images
  */
 export async function warmBuildingImageCache(buildings: any[]): Promise<void> {
+  console.log(`[ImageCache] warmBuildingImageCache called with ${buildings.length} buildings`);
   const imageUrls = buildings
     .filter(building => building.imageUrl)
     .map(building => building.imageUrl)
     .filter((url): url is string => Boolean(url));
   
   if (imageUrls.length > 0) {
-    console.log(`Warming image cache with ${imageUrls.length} building images...`);
+    console.log(`[ImageCache] Warming ${imageUrls.length} building images:`, imageUrls);
     await preloadImages(imageUrls);
+    console.log(`[ImageCache] Finished warming ${imageUrls.length} images`);
+  } else {
+    console.log(`[ImageCache] No building images to warm`);
   }
 }

@@ -55,6 +55,8 @@ export interface LocationData {
   name: string;
   latitude: number;
   longitude: number;
+  positionX: number; // Original percentage (0-100) for direct positioning
+  positionY: number; // Original percentage (0-100) for direct positioning
   category: string;
   icon: string;
   description: string;
@@ -83,10 +85,11 @@ export interface SearchResult {
 export const BUILDINGS_CACHE_KEY = 'buildings-data';
 export const NOTICES_CACHE_KEY = 'notices-data';
 export const OFFICES_CACHE_KEY = 'offices-data';
+export const VERSION_CACHE_KEY = 'app-version';
 
 // Map bounds for converting percentage-based positions to GPS coordinates
 // These should match the overlay bounds in CampusMap.tsx
-const MAP_BOUNDS = {
+export const MAP_BOUNDS = {
   southWest: { latitude: 9.03689, longitude: 38.83527 },
   northEast: { latitude: 9.04128, longitude: 38.84315 },
 };
@@ -124,6 +127,8 @@ function transformBuilding(building: Building): LocationData {
     name: building.name,
     latitude,
     longitude,
+    positionX: building.positionX,
+    positionY: building.positionY,
     category: building.category,
     icon: building.icon,
     description: building.description,
@@ -144,6 +149,8 @@ function transformBuilding(building: Building): LocationData {
  */
 export async function fetchBuildings(): Promise<LocationData[]> {
   try {
+    console.log('[API] Fetching buildings from Supabase...');
+    const startTime = Date.now();
     const { data: buildings, error } = await (supabase
       .from('Building') as any)
       .select(`
@@ -153,19 +160,24 @@ export async function fetchBuildings(): Promise<LocationData[]> {
       .order('createdAt', { ascending: false })
       .order('name', { foreignTable: 'Office', ascending: true });
     
+    const duration = Date.now() - startTime;
+    
     if (error) {
+      console.error(`[API] Error fetching buildings after ${duration}ms:`, error);
       throw new Error(`Failed to fetch buildings: ${error.message}`);
     }
     
+    console.log(`[API] Fetched ${buildings?.length || 0} buildings from Supabase in ${duration}ms`);
     const formattedBuildings = (buildings || []).map(transformBuilding);
     
     // Save to cache in the background
     saveToCache(BUILDINGS_CACHE_KEY, formattedBuildings).catch(err => 
-      console.warn('Failed to cache buildings:', err)
+      console.warn('[API] Failed to cache buildings:', err)
     );
     
     return formattedBuildings;
   } catch (error) {
+    console.error('[API] fetchBuildings exception:', error);
     throw error;
   }
 }
@@ -209,24 +221,25 @@ export async function fetchBuildingById(id: string): Promise<LocationData | null
  */
 export async function fetchNotices(): Promise<Notice[]> {
   try {
-    const { data: notices, error } = await (supabase
-      .from('Notice') as any)
+    const { data: notices, error } = await supabase
+      .from('Notice')
+      .select('*')
       .order('createdAt', { ascending: false });
-    
+
     if (error) {
       throw new Error(`Failed to fetch notices: ${error.message}`);
     }
-    
+
     const formattedNotices = (notices || []).map((notice: Notice) => ({
       ...notice,
       date: notice.date || notice.createdAt,
     }));
-    
+
     // Save to cache in the background
-    saveToCache(NOTICES_CACHE_KEY, formattedNotices).catch(err => 
+    saveToCache(NOTICES_CACHE_KEY, formattedNotices).catch(err =>
       console.warn('Failed to cache notices:', err)
     );
-    
+
     return formattedNotices;
   } catch (error) {
     throw error;
@@ -340,6 +353,53 @@ export async function offlineSearch(query: string): Promise<SearchResult[]> {
   } catch (error) {
     console.error('Offline search failed:', error);
     return [];
+  }
+}
+
+/**
+ * Get current app version from Supabase
+ */
+export async function getCurrentVersion(): Promise<number> {
+  try {
+    const { data, error } = await (supabase
+      .from('AppVersion') as any)
+      .select('versionNumber')
+      .eq('id', 'current')
+      .single();
+
+    if (error) {
+      console.error('[API] Error fetching version:', error);
+      return 0;
+    }
+
+    return data?.versionNumber || 0;
+  } catch (error) {
+    console.error('[API] getCurrentVersion exception:', error);
+    return 0;
+  }
+}
+
+/**
+ * Get locally cached version
+ */
+export async function getLocalVersion(): Promise<number> {
+  try {
+    const version = await getFromCache<number>(VERSION_CACHE_KEY);
+    return version || 0;
+  } catch (error) {
+    console.error('[API] getLocalVersion exception:', error);
+    return 0;
+  }
+}
+
+/**
+ * Save locally cached version
+ */
+export async function saveLocalVersion(version: number): Promise<void> {
+  try {
+    await saveToCache(VERSION_CACHE_KEY, version);
+  } catch (error) {
+    console.error('[API] saveLocalVersion exception:', error);
   }
 }
 

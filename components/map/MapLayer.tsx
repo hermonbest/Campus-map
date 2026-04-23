@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { StyleSheet, View, Text, Image, useWindowDimensions, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useImperativeHandle, forwardRef, useMemo, useEffect } from 'react';
+import { StyleSheet, View, Text, useWindowDimensions, TouchableOpacity, Platform } from 'react-native';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { 
   useSharedValue, 
@@ -7,16 +7,11 @@ import Animated, {
   withSpring, 
   withTiming,
   clamp,
-  interpolate
+  runOnJS
 } from 'react-native-reanimated';
-import { LocationData } from '@/lib/api';
+import { Image } from 'expo-image';
+import { LocationData, MAP_BOUNDS } from '@/lib/api';
 import { colors } from '@/styles/tokens';
-
-// Constants for coordinate projection (must match lib/api.ts)
-const MAP_BOUNDS = {
-  southWest: { latitude: 9.03689, longitude: 38.83527 },
-  northEast: { latitude: 9.04128, longitude: 38.84315 },
-};
 
 interface MapLayerProps {
   buildings: LocationData[];
@@ -31,6 +26,12 @@ export interface MapRef {
   centerOnUser: () => void;
 }
 
+// Image aspect ratio (1320x744 from the actual image)
+const IMAGE_ASPECT_RATIO = 1320 / 744;
+
+// Vertical offset to move map upward (negative = up, positive = down)
+const MAP_VERTICAL_OFFSET = 0;
+
 const MapLayer = forwardRef<MapRef, MapLayerProps>(({
   buildings,
   selectedLocation,
@@ -38,61 +39,99 @@ const MapLayer = forwardRef<MapRef, MapLayerProps>(({
   onSelectLocation,
 }, ref) => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  
-  // Image aspect ratio (we'll assume a value until loaded or use layout)
-  const [imageSize, setImageSize] = useState({ width: 1, height: 1 });
-  const [containerSize, setContainerSize] = useState({ width: 1, height: 1 });
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  // 1. Calculate the base image dimensions (cover mode at scale 1)
+  const baseImageDims = useMemo(() => {
+    const { width: CW, height: CH } = containerSize;
+
+    if (CW === 0 || CH === 0) return { width: 0, height: 0 };
+
+    const CA = CW / CH;
+    const IA = IMAGE_ASPECT_RATIO;
+
+    let width, height;
+    if (CA > IA) {
+      // Container is wider than image aspect ratio -> width fills container
+      width = CW;
+      height = CW / IA;
+    } else {
+      // Container is taller than image aspect ratio -> height fills container
+      height = CH;
+      width = CH * IA;
+    }
+    return { width, height };
+  }, [containerSize]);
 
   // Pan and Zoom shared values
   const scale = useSharedValue(1);
-  const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const savedTranslateX = useSharedValue(0);
-  const savedTranslateY = useSharedValue(0);
+  const translateY = useSharedValue(MAP_VERTICAL_OFFSET);
 
-  // Constants for clamping
+  // Temporary values for gesture processing
+  const startScale = useSharedValue(1);
+  const startTranslateX = useSharedValue(0);
+  const startTranslateY = useSharedValue(0);
+
   const MIN_SCALE = 1;
-  const MAX_SCALE = 5;
+  const MAX_SCALE = 6;
 
   const onLayout = (event: any) => {
     const { width, height } = event.nativeEvent.layout;
-    setContainerSize({ width, height });
+    if (width > 0 && height > 0) {
+      setContainerSize({ width, height });
+    }
   };
 
-  const onImageLoad = (event: any) => {
-    // We can get dimensions here if needed, but we'll use container layout for scaling
+  const CH = containerSize.height;
+
+  // Helper to clamp translation based on current scale
+  // Ensures the image always covers the container
+  const getClampedTranslate = (tx: number, ty: number, s: number) => {
+    'worklet';
+    const scaledW = baseImageDims.width * s;
+    const scaledH = baseImageDims.height * s;
+    
+    const limitX = Math.max(0, (scaledW - containerSize.width) / 2);
+    const limitY = Math.max(0, (scaledH - containerSize.height) / 2);
+
+    return {
+      x: clamp(tx, -limitX, limitX),
+      y: clamp(ty, -limitY, limitY)
+    };
   };
 
   // Recenter map logic
   const recenter = useCallback(() => {
     scale.value = withSpring(1);
     translateX.value = withSpring(0);
-    translateY.value = withSpring(0);
-    savedScale.value = 1;
-    savedTranslateX.value = 0;
-    savedTranslateY.value = 0;
+    translateY.value = withSpring(MAP_VERTICAL_OFFSET);
   }, []);
 
   const animateTo = useCallback((lat: number, lon: number) => {
     const lonRange = MAP_BOUNDS.northEast.longitude - MAP_BOUNDS.southWest.longitude;
     const latRange = MAP_BOUNDS.northEast.latitude - MAP_BOUNDS.southWest.latitude;
 
-    const targetX = ((lon - MAP_BOUNDS.southWest.longitude) / lonRange) * containerSize.width;
-    const targetY = ((MAP_BOUNDS.northEast.latitude - lat) / latRange) * containerSize.height;
+    // Normalized position on image (0-1)
+    const ix = (lon - MAP_BOUNDS.southWest.longitude) / lonRange;
+    const iy = (MAP_BOUNDS.northEast.latitude - lat) / latRange;
+
+    // Position in local coordinates of the base image view
+    const targetX = (ix - 0.5) * baseImageDims.width;
+    const targetY = (iy - 0.5) * baseImageDims.height;
 
     const zoomScale = 3;
-    scale.value = withSpring(zoomScale);
+    const nextScale = clamp(zoomScale, MIN_SCALE, MAX_SCALE);
     
-    // We want to center the target point
-    // translation = (center - target * scale)
-    translateX.value = withSpring((containerSize.width / 2) - (targetX * zoomScale));
-    translateY.value = withSpring((containerSize.height / 2) - (targetY * zoomScale));
+    // In Reanimated, transform: [{translateX}, {translateY}, {scale}]
+    // Target translation to center the point:
+    // tx = -targetX * nextScale
+    const clamped = getClampedTranslate(-targetX * nextScale, -targetY * nextScale, nextScale);
     
-    savedScale.value = zoomScale;
-    savedTranslateX.value = (containerSize.width / 2) - (targetX * zoomScale);
-    savedTranslateY.value = (containerSize.height / 2) - (targetY * zoomScale);
-  }, [containerSize]);
+    scale.value = withSpring(nextScale);
+    translateX.value = withSpring(clamped.x);
+    translateY.value = withSpring(clamped.y);
+  }, [baseImageDims, containerSize]);
 
   const centerOnUser = useCallback(() => {
     if (userLocation) {
@@ -106,34 +145,48 @@ const MapLayer = forwardRef<MapRef, MapLayerProps>(({
     centerOnUser
   }));
 
-  // Pinch Gesture
-  const pinchGesture = Gesture.Pinch()
-    .onUpdate((e) => {
-      scale.value = clamp(savedScale.value * e.scale, MIN_SCALE, MAX_SCALE);
-    })
-    .onEnd(() => {
-      savedScale.value = scale.value;
-    });
+  // Combined Pan and Pinch Gesture
+  const gesture = Gesture.Simultaneous(
+    Gesture.Pan()
+      .onStart(() => {
+        startTranslateX.value = translateX.value;
+        startTranslateY.value = translateY.value;
+      })
+      .onUpdate((e) => {
+        const nextX = startTranslateX.value + e.translationX;
+        const nextY = startTranslateY.value + e.translationY;
+        const clamped = getClampedTranslate(nextX, nextY, scale.value);
+        translateX.value = clamped.x;
+        translateY.value = clamped.y;
+      }),
+    Gesture.Pinch()
+      .onStart(() => {
+        startScale.value = scale.value;
+        startTranslateX.value = translateX.value;
+        startTranslateY.value = translateY.value;
+      })
+      .onUpdate((e) => {
+        const nextScale = clamp(startScale.value * e.scale, MIN_SCALE, MAX_SCALE);
+        
+        // Focal point zoom logic
+        // We want to keep the focal point at the same screen position
+        const focalX = e.focalX - containerSize.width / 2;
+        const focalY = e.focalY - containerSize.height / 2;
 
-  // Pan Gesture
-  const panGesture = Gesture.Pan()
-    .onUpdate((e) => {
-      translateX.value = savedTranslateX.value + e.translationX;
-      translateY.value = savedTranslateY.value + e.translationY;
-      
-      // Limit panning so image doesn't completely leave view
-      // This is a simple implementation, can be refined
-      const maxTranslateX = (containerSize.width * scale.value - containerSize.width) / 2;
-      const maxTranslateY = (containerSize.height * scale.value - containerSize.height) / 2;
-      
-      // We don't clamp strictly here to allow smooth movement, but we could
-    })
-    .onEnd(() => {
-      savedTranslateX.value = translateX.value;
-      savedTranslateY.value = translateY.value;
-    });
-
-  const composedGesture = Gesture.Race(pinchGesture, panGesture);
+        // How much the scale changed
+        const scaleChange = nextScale / startScale.value;
+        
+        // Adjust translation to compensate for scale around focal point
+        const nextX = startTranslateX.value + (focalX - startTranslateX.value) * (1 - scaleChange);
+        const nextY = startTranslateY.value + (focalY - startTranslateY.value) * (1 - scaleChange);
+        
+        const clamped = getClampedTranslate(nextX, nextY, nextScale);
+        
+        scale.value = nextScale;
+        translateX.value = clamped.x;
+        translateY.value = clamped.y;
+      })
+  );
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -145,73 +198,108 @@ const MapLayer = forwardRef<MapRef, MapLayerProps>(({
     };
   });
 
-  // Marker positioning helper
-  const getMarkerPosition = (lat: number, lon: number) => {
+  // Inverse scale style for markers to keep them constant size
+  const markerIconStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: 1 / scale.value }],
+    };
+  });
+
+  // Marker positioning helper - GPS to pixels (for user location)
+  // Returns pixel position relative to the top-left of the image
+  const getMarkerStyle = (lat: number, lon: number) => {
     const lonRange = MAP_BOUNDS.northEast.longitude - MAP_BOUNDS.southWest.longitude;
     const latRange = MAP_BOUNDS.northEast.latitude - MAP_BOUNDS.southWest.latitude;
 
-    const x = ((lon - MAP_BOUNDS.southWest.longitude) / lonRange) * 100;
-    const y = ((MAP_BOUNDS.northEast.latitude - lat) / latRange) * 100;
+    const ix = (lon - MAP_BOUNDS.southWest.longitude) / lonRange;
+    const iy = (MAP_BOUNDS.northEast.latitude - lat) / latRange;
 
-    return { left: `${x}%`, top: `${y}%` };
+    return {
+      left: ix * baseImageDims.width,
+      top: iy * baseImageDims.height,
+    };
+  };
+
+  // Marker positioning helper - Percentage to pixels (for buildings)
+  // Uses direct percentage like web admin for perfect alignment
+  const getMarkerStyleFromPercent = (positionX: number, positionY: number) => {
+    return {
+      left: (positionX / 100) * baseImageDims.width,
+      top: (positionY / 100) * baseImageDims.height,
+    };
   };
 
   return (
     <GestureHandlerRootView style={styles.container}>
       <View style={styles.container} onLayout={onLayout}>
-        <GestureDetector gesture={composedGesture}>
-          <Animated.View style={[styles.mapContent, animatedStyle]}>
-            <Image
-              source={require('../../assets/kue_map.png')}
-              style={styles.mapImage}
-              resizeMode="contain"
-            />
-            
-            {/* Building Markers */}
-            {buildings.map((loc) => {
-              const isSelected = selectedLocation?.id === loc.id;
-              const pos = getMarkerPosition(loc.latitude, loc.longitude);
+        <GestureDetector gesture={gesture}>
+          <View style={styles.gestureCapture}>
+            <Animated.View style={[
+              { 
+                width: baseImageDims.width, 
+                height: baseImageDims.height,
+              }, 
+              animatedStyle
+            ]}>
+              <Image
+                source={require('../../assets/kue_map.png')}
+                style={StyleSheet.absoluteFill}
+                contentFit="fill"
+                cachePolicy="memory-disk"
+              />
               
-              return (
-                <View 
-                  key={loc.id} 
-                  style={[
-                    styles.markerWrapper, 
-                    { left: pos.left as any, top: pos.top as any },
-                    isSelected && { zIndex: 10 }
-                  ]}
-                >
-                  <TouchableOpacity
-                    onPress={() => onSelectLocation(loc)}
+              {/* Building Markers */}
+              {buildings.map((loc) => {
+                const isSelected = selectedLocation?.id === loc.id;
+                // Use percentage-based positioning to match web admin exactly
+                const pos = getMarkerStyleFromPercent(loc.positionX, loc.positionY);
+
+                return (
+                  <View
+                    key={loc.id}
                     style={[
-                      styles.customMarker,
-                      isSelected && styles.selectedMarker
+                      styles.markerWrapper,
+                      { left: pos.left, top: pos.top },
+                      isSelected && { zIndex: 10 }
                     ]}
                   >
-                    <Text style={{ fontSize: 14 }}>
-                      {loc.icon || '📍'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
+                    <Animated.View style={markerIconStyle}>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => onSelectLocation(loc)}
+                        style={[
+                          styles.customMarker,
+                          isSelected && styles.selectedMarker
+                        ]}
+                      >
+                        <Text style={{ fontSize: 14 }}>
+                          {loc.icon || '📍'}
+                        </Text>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  </View>
+                );
+              })}
 
-            {/* User Location Marker */}
-            {userLocation && (
-              <View 
-                style={[
-                  styles.markerWrapper, 
-                  getMarkerPosition(userLocation.coords.latitude, userLocation.coords.longitude) as any,
-                  { zIndex: 20 }
-                ]}
-              >
-                <View style={styles.userDot}>
-                  <View style={styles.userDotPulse} />
-                  <View style={styles.userDotInner} />
+              {/* User Location Marker */}
+              {userLocation && (
+                <View 
+                  style={[
+                    styles.markerWrapper, 
+                    getMarkerStyle(userLocation.coords.latitude, userLocation.coords.longitude),
+                    { zIndex: 20 }
+                  ]}
+                >
+                  <Animated.View style={markerIconStyle}>
+                    <View style={styles.userDot}>
+                      <View style={styles.userDotPulse} />
+                      <View style={styles.userDotInner} />
+                    </View>
+                  </Animated.View>
                 </View>
-              </View>
-            )}
-          </Animated.View>
+              )}
+            </Animated.View>
+          </View>
         </GestureDetector>
       </View>
     </GestureHandlerRootView>
@@ -221,27 +309,21 @@ const MapLayer = forwardRef<MapRef, MapLayerProps>(({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#4CAF50ff', // Match the previous map background
+    backgroundColor: '#000', // Black background to avoid seeing anything during layout
     overflow: 'hidden',
   },
-  mapContent: {
-    width: '100%',
-    height: '100%',
+  gestureCapture: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapImage: {
-    width: '100%',
-    height: '100%',
+    justifyContent: 'flex-start',
   },
   markerWrapper: {
     position: 'absolute',
-    width: 32,
-    height: 32,
-    marginLeft: -16, // Center marker on point
-    marginTop: -16,
+    width: 0, // Zero size container to perfectly center children
+    height: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
   },
   customMarker: {
     backgroundColor: 'white',
@@ -261,7 +343,6 @@ const styles = StyleSheet.create({
   selectedMarker: {
     backgroundColor: '#4F46E5',
     borderColor: '#4F46E5',
-    transform: [{ scale: 1.2 }],
   },
   userDot: {
     width: 20,

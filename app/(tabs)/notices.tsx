@@ -143,14 +143,14 @@ export default function NoticesScreen() {
                 <View style={[styles.badge, { alignSelf: 'flex-start', marginBottom: 16 }]}>
                   <Text style={styles.badgeText}>{selectedNotice.type.toUpperCase()}</Text>
                 </View>
-                <Text style={[styles.modalDate, { color: colors.outline }]}>{formatDate(selectedNotice.date)}</Text>
-                <Text style={[styles.modalTitle, { color: isDark ? colors.white : colors.primary }]}>
+                <Text style={[styles.modalDate, { color: isDark ? colors.outline : '#000000' }]}>{formatDate(selectedNotice.date)}</Text>
+                <Text style={[styles.modalTitle, { color: isDark ? colors.outlineVariant : '#000000' }]}>
                   {selectedNotice.title}
                 </Text>
                 
                 <View style={styles.authorBadge}>
                   <Ionicons name="person-circle-outline" size={20} color={colors.secondary} />
-                  <Text style={[styles.authorText, { color: isDark ? 'rgba(255,255,255,0.6)' : colors.textMuted }]}>
+                  <Text style={[styles.authorText, { color: isDark ? 'rgba(0, 0, 0, 0.6)' : '#000000' }]}>
                     POSTED BY {selectedNotice.author.toUpperCase()}
                   </Text>
                 </View>
@@ -163,7 +163,7 @@ export default function NoticesScreen() {
                   />
                 )}
 
-                <Text style={[styles.modalContent, { color: isDark ? colors.outlineVariant : colors.text }]}>
+                <Text style={[styles.modalContent, { color: isDark ? colors.outlineVariant : '#000000' }]}>
                   {selectedNotice.content}
                 </Text>
                 

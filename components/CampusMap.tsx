@@ -18,19 +18,19 @@ import ActiveLocationCard from './map/ActiveLocationCard';
 import OfflineIndicator from './OfflineIndicator';
 
 
-const OVERLAY_LAT_SPAN = 9.04128 - 9.03695;   // = 0.00439
+const OVERLAY_LAT_SPAN = 9.04128 - 9.03689;   // = 0.00439
 const OVERLAY_LON_SPAN = 38.84315 - 38.83527;  // = 0.00788
 
 const LATITUDE_DELTA_BASE = OVERLAY_LAT_SPAN * 1;
 
 const CAMPUS_BOUNDARIES = {
   southWest: {
-     latitude: 9.03689 + 0.0021,  // Pulled UP from the bottom
-    longitude: 38.83527 + 0.0012  // Pulled IN from the left
+    latitude: 9.03689,
+    longitude: 38.83527
   },
   northEast: {
-    latitude: 9.04128 - 0.0022,   // Pulled DOWN from the top
-    longitude: 38.84315 - 0.0012 // Pulled IN from the right
+    latitude: 9.04128,
+    longitude: 38.84315
   },
 };
 
@@ -67,14 +67,18 @@ export default function CampusMap() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await refresh();
-    } finally {
-      setRefreshing(false);
-    }
-  };
+   const onRefresh = async () => {
+     console.log('[CampusMap] Pull-to-refresh triggered');
+     setRefreshing(true);
+     try {
+       await refresh();
+       console.log('[CampusMap] Refresh completed');
+     } catch (err) {
+       console.error('[CampusMap] Refresh failed:', err);
+     } finally {
+       setRefreshing(false);
+     }
+   };
 
   useEffect(() => {
     if (locationId && buildings.length > 0) {
@@ -106,12 +110,7 @@ export default function CampusMap() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (mapRef.current) {
-      // Immediately focus on campus region to avoid showing world map on reload
-      mapRef.current.recenter();
-    }
-  }, [mapRef.current]);
+  // Removed automatic recenter to prevent black area issue
 
   const handleSearch = async (text: string) => {
     console.log('Map search triggered:', text);
@@ -120,7 +119,7 @@ export default function CampusMap() {
       setSearchResults([]);
       return;
     }
-    
+
     // Don't search if less than 2 characters
     if (text.trim().length < 2) {
       setSearchResults([]);
@@ -129,35 +128,14 @@ export default function CampusMap() {
 
     setIsSearching(true);
     try {
-      // Check if we're offline first
-      const networkStatus = await offlineManager.getNetworkStatus();
-      console.log('Network status:', networkStatus);
-      
-      if (!networkStatus.isConnected || networkStatus.isInternetReachable === false) {
-        console.log('Offline detected, using offline search directly');
-        const { offlineSearch } = await import('../lib/api');
-        const offlineResults = await offlineSearch(text);
-        console.log('Offline results:', offlineResults.length);
-        setSearchResults(offlineResults);
-      } else {
-        // Try online search
-        const { searchCampus } = await import('../lib/api');
-        const results = await searchCampus(text);
-        console.log('Online results:', results.length);
-        setSearchResults(results);
-      }
+      // Always use offline search first
+      const { offlineSearch } = await import('../lib/api');
+      const offlineResults = await offlineSearch(text);
+      console.log('Offline results:', offlineResults.length);
+      setSearchResults(offlineResults);
     } catch (err) {
-      // Fall back to enhanced offline search that includes offices
-      console.log('Search failed, falling back to offline search:', err);
-      try {
-        const { offlineSearch } = await import('../lib/api');
-        const offlineResults = await offlineSearch(text);
-        console.log('Fallback offline results:', offlineResults.length);
-        setSearchResults(offlineResults);
-      } catch (offlineError) {
-        console.error('Offline search failed:', offlineError);
-        setSearchResults([]);
-      }
+      console.error('Search failed:', err);
+      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
@@ -220,65 +198,71 @@ export default function CampusMap() {
     mapRef.current?.centerOnUser();
   };
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: isDark ? colors.background : colors.surface }}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading buildings...</Text>
-        </View>
+   if (loading) {
+     return (
+       <View style={{ flex: 1, backgroundColor: isDark ? colors.background : colors.surface }}>
+         <View style={styles.loadingContainer}>
+           <ActivityIndicator size="large" color={colors.primary} />
+           <Text style={styles.loadingText}>Loading buildings...</Text>
+         </View>
+       </View>
+     );
+   }
+
+   if (error) {
+     return (
+       <View style={{ flex: 1, backgroundColor: isDark ? colors.background : colors.surface }}>
+         <View style={styles.errorContainer}>
+           <Ionicons name="alert-circle" size={48} color={colors.error} />
+           <Text style={styles.errorText}>Failed to load buildings</Text>
+           <Text style={styles.errorSubtext}>{error}</Text>
+           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={refresh}>
+             <Text style={styles.retryButtonText}>Retry</Text>
+           </TouchableOpacity>
+         </View>
+       </View>
+     );
+   }
+
+   return (
+     <View style={styles.container}>
+       {/* Offline Indicator */}
+       <OfflineIndicator />
+       
+       {/* Header with KUE branding */}
+       <View style={[styles.header, { backgroundColor: isDark ? colors.primary : colors.surface, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
+         <View style={styles.headerLeft}>
+           <Text style={[styles.title, { color: isDark ? colors.white : colors.primary }]}>KUE Map</Text>
+         </View>
+         <Image style={styles.profileImg} source={require('../assets/kue_logo.png')} />
+       </View>
+
+       {/* Scrollable Map Container with Pull-to-Refresh */}
+       <View style={{ flex: 1 }}>
+         <ScrollView
+           refreshControl={
+             <RefreshControl
+               refreshing={refreshing}
+               onRefresh={onRefresh}
+               tintColor={colors.primary}
+               colors={[colors.primary]}
+               progressViewOffset={100} // Offset below header
+             />
+           }
+           contentContainerStyle={{ flexGrow: 1 }}
+           scrollEnabled={false} // Disable scrolling, map handles its own panning
+         >
+           <View style={{ flex: 1, paddingBottom: 60 + Math.max(insets.bottom) }}>
+             <MapLayer
+               ref={mapRef}
+               buildings={buildings}
+               selectedLocation={selectedLocation}
+               userLocation={userLocation}
+               onSelectLocation={selectLocation}
+             />
+           </View>
+        </ScrollView>
       </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={{ flex: 1, backgroundColor: isDark ? colors.background : colors.surface }}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color={colors.error} />
-          <Text style={styles.errorText}>Failed to load buildings</Text>
-          <Text style={styles.errorSubtext}>{error}</Text>
-          <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.primary }]} onPress={refresh}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <ScrollView 
-      style={styles.container}
-      contentContainerStyle={{ flexGrow: 1 }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={colors.primary}
-          colors={[colors.primary]}
-        />
-      }
-    >
-      <View style={styles.contentWrapper}>
-        {/* Offline Indicator */}
-        <OfflineIndicator />
-        
-        {/* Header with KUE branding */}
-        <View style={[styles.header, { backgroundColor: isDark ? colors.primary : colors.surface, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
-          <View style={styles.headerLeft}>
-            <Text style={[styles.title, { color: isDark ? colors.white : colors.primary }]}>KUE Map</Text>
-          </View>
-          <Image style={styles.profileImg} source={require('../assets/kue_logo.png')} />
-        </View>
-
-        {/* 1. Base Map Layer */}
-        <MapLayer
-          ref={mapRef}
-          buildings={buildings}
-          selectedLocation={selectedLocation}
-          userLocation={userLocation}
-          onSelectLocation={selectLocation}
-        />
 
       {/* 2. Top Search & Filter UI */}
       <SearchOverlay
@@ -291,8 +275,6 @@ export default function CampusMap() {
         topInset={insets.top}
         isSearching={isSearching}
       />
-
-
 
       {/* 3. Floating Quick Info Card (Shows when marker is selected) */}
       <ActiveLocationCard
@@ -327,8 +309,7 @@ export default function CampusMap() {
           <Ionicons name="navigate" size={20} color={colors.white} />
         </TouchableOpacity>
       </View>
-      </View>
-    </ScrollView>
+    </View>
   );
 }
 

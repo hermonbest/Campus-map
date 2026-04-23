@@ -12,7 +12,7 @@ export const colors = {
   text: '#191c1d', // on-surface
   textMuted: '#44474e', // on-surface-variant
   outline: '#74777f',
-  outlineVariant: '#c4c6cf',
+  outlineVariant: '#000000',
   border: '#c4c6cf',
   white: '#ffffff',
   black: '#000000',

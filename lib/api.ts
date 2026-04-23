@@ -144,8 +144,8 @@ function transformBuilding(building: Building): LocationData {
  */
 export async function fetchBuildings(): Promise<LocationData[]> {
   try {
-    const { data: buildings, error } = await supabase
-      .from('Building')
+    const { data: buildings, error } = await (supabase
+      .from('Building') as any)
       .select(`
         *,
         offices:Office(*)
@@ -182,8 +182,8 @@ export async function getCachedBuildings(): Promise<LocationData[] | null> {
  */
 export async function fetchBuildingById(id: string): Promise<LocationData | null> {
   try {
-    const { data: building, error } = await supabase
-      .from('Building')
+    const { data: building, error } = await (supabase
+      .from('Building') as any)
       .select(`
         *,
         offices:Office(*)
@@ -209,16 +209,15 @@ export async function fetchBuildingById(id: string): Promise<LocationData | null
  */
 export async function fetchNotices(): Promise<Notice[]> {
   try {
-    const { data: notices, error } = await supabase
-      .from('Notice')
-      .select('*')
+    const { data: notices, error } = await (supabase
+      .from('Notice') as any)
       .order('createdAt', { ascending: false });
     
     if (error) {
       throw new Error(`Failed to fetch notices: ${error.message}`);
     }
     
-    const formattedNotices = (notices || []).map(notice => ({
+    const formattedNotices = (notices || []).map((notice: Notice) => ({
       ...notice,
       date: notice.date || notice.createdAt,
     }));
@@ -350,9 +349,8 @@ export async function offlineSearch(query: string): Promise<SearchResult[]> {
 export async function searchCampus(query: string): Promise<SearchResult[]> {
   try {
     // Search buildings
-    const { data: buildings, error: buildingsError } = await supabase
-      .from('Building')
-      .select('*')
+    const { data: buildings, error: buildingsError } = await (supabase
+      .from('Building') as any)
       .or(`name.ilike.%${query}%,description.ilike.%${query}%,category.ilike.%${query}%`);
     
     if (buildingsError) {
@@ -360,9 +358,8 @@ export async function searchCampus(query: string): Promise<SearchResult[]> {
     }
     
     // Search offices
-    const { data: offices, error: officesError } = await supabase
-      .from('Office')
-      .select('*')
+    const { data: offices, error: officesError } = await (supabase
+      .from('Office') as any)
       .or(`name.ilike.%${query}%,description.ilike.%${query}%`);
     
     if (officesError) {
@@ -372,7 +369,7 @@ export async function searchCampus(query: string): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
     
     // Add building results
-    (buildings || []).forEach(building => {
+    (buildings || []).forEach((building: Building) => {
       results.push({
         id: building.id,
         name: building.name,
@@ -385,7 +382,7 @@ export async function searchCampus(query: string): Promise<SearchResult[]> {
     });
     
     // Add office results
-    (offices || []).forEach(office => {
+    (offices || []).forEach((office: Office) => {
       results.push({
         id: office.id,
         name: office.name,

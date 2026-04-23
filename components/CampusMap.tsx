@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, useWindowDimensions, Linking, Platform, Keyboard, ActivityIndicator, Image, Modal, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker, Overlay, PROVIDER_GOOGLE, Polygon } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useBuildings } from '../hooks/useBuildings';
-import mapStyle from '../data/mapStyle.json';
 import { colors } from '../styles/tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { LocationData } from '../lib/api';
@@ -13,7 +11,7 @@ import { useLocalSearchParams } from 'expo-router';
 import offlineManager from '../lib/offlineManager';
 
 // Modular Sub-components
-import MapLayer from './map/MapLayer';
+import MapLayer, { MapRef } from './map/MapLayer';
 import SearchOverlay from './map/SearchOverlay';
 import BuildingSheet from './map/BuildingSheet';
 import ActiveLocationCard from './map/ActiveLocationCard';
@@ -58,7 +56,7 @@ export default function CampusMap() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredLocations, setFilteredLocations] = useState<LocationData[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
-  const mapRef = useRef<MapView>(null!);
+  const mapRef = useRef<MapRef>(null);
 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -110,12 +108,8 @@ export default function CampusMap() {
 
   useEffect(() => {
     if (mapRef.current) {
-      mapRef.current.setMapBoundaries(
-        CAMPUS_BOUNDARIES.northEast,
-        CAMPUS_BOUNDARIES.southWest
-      );
       // Immediately focus on campus region to avoid showing world map on reload
-      mapRef.current.animateToRegion(CAMPUS_REGION, 0);
+      mapRef.current.recenter();
     }
   }, [mapRef.current]);
 
@@ -177,12 +171,7 @@ export default function CampusMap() {
     setSearchResults([]);
 
     // Center the map on the selected location without changing zoom
-    mapRef.current?.animateToRegion({
-      latitude: location.latitude,
-      longitude: location.longitude,
-      latitudeDelta: LATITUDE_DELTA_BASE, // Use base deltas instead of zooming in
-      longitudeDelta: LATITUDE_DELTA_BASE * ASPECT_RATIO,
-    }, 1000);
+    mapRef.current?.animateTo(location.latitude, location.longitude);
   };
 
   const selectSearchResult = (item: any) => {
@@ -224,18 +213,11 @@ export default function CampusMap() {
   };
 
   const recenterMap = () => {
-    mapRef.current?.animateToRegion(CAMPUS_REGION, 1000);
+    mapRef.current?.recenter();
   };
 
   const centerOnUser = () => {
-    if (userLocation) {
-      mapRef.current?.animateToRegion({
-        latitude: userLocation.coords.latitude,
-        longitude: userLocation.coords.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }, 1000);
-    }
+    mapRef.current?.centerOnUser();
   };
 
   if (loading) {
@@ -291,10 +273,7 @@ export default function CampusMap() {
 
         {/* 1. Base Map Layer */}
         <MapLayer
-          mapRef={mapRef}
-          initialRegion={CAMPUS_REGION}
-          mapStyle={mapStyle}
-          overlayBounds={OVERLAY_BOUNDS}
+          ref={mapRef}
           buildings={buildings}
           selectedLocation={selectedLocation}
           userLocation={userLocation}

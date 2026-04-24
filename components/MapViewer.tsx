@@ -1,11 +1,29 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Image, StyleSheet, useWindowDimensions, StatusBar, Platform, ScrollView } from 'react-native';
+import { View, Image, StyleSheet, useWindowDimensions, StatusBar, Platform, ScrollView, TouchableOpacity, Text } from 'react-native';
+
+interface Building {
+  id: string;
+  name: string;
+  description: string | null;
+  x_pos: number;
+  y_pos: number;
+  color: string;
+  icon_type: string;
+  offices?: Array<{
+    id: string;
+    room_number: string;
+    staff_name: string;
+    floor: number | null;
+  }>;
+}
 
 interface MapViewerProps {
   mapUrl: string;
+  buildings?: Building[];
+  onBuildingPress?: (building: Building) => void;
 }
 
-export function MapViewer({ mapUrl }: MapViewerProps) {
+export function MapViewer({ mapUrl, buildings = [], onBuildingPress }: MapViewerProps) {
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const scrollViewRef = useRef<ScrollView>(null);
   
@@ -32,14 +50,32 @@ export function MapViewer({ mapUrl }: MapViewerProps) {
         contentContainerStyle={styles.scrollContent}
         showsHorizontalScrollIndicator={false}
       >
-        <Image
-          source={{ uri: mapUrl }}
-          style={{
-            width: imageWidth,
-            height: imageHeight,
-          }}
-          resizeMode="cover"
-        />
+        <View style={{ width: imageWidth, height: imageHeight, position: 'relative' }}>
+          <Image
+            source={{ uri: mapUrl }}
+            style={{
+              width: imageWidth,
+              height: imageHeight,
+            }}
+            resizeMode="cover"
+          />
+          {buildings.map((building) => (
+            <TouchableOpacity
+              key={building.id}
+              style={[
+                styles.buildingMarker,
+                {
+                  left: building.x_pos * imageWidth - 20,
+                  top: building.y_pos * imageHeight - 20,
+                  backgroundColor: building.color,
+                },
+              ]}
+              onPress={() => onBuildingPress?.(building)}
+            >
+              <Text style={styles.buildingMarkerText}>B</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
@@ -55,5 +91,25 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     height: '100%',
+  },
+  buildingMarker: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  buildingMarkerText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

@@ -197,3 +197,31 @@ export async function getMapUrl(): Promise<string> {
     throw error;
   }
 }
+
+/**
+ * Cache individual data type
+ */
+export async function cacheData(key: string, data: any): Promise<void> {
+  try {
+    const cacheKey = `@campus_${key}`;
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+  } catch (error) {
+    console.error(`Error caching ${key}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Get cached individual data type
+ */
+export async function getCachedItem(key: string): Promise<any | null> {
+  try {
+    const cacheKey = `@campus_${key}`;
+    const dataStr = await AsyncStorage.getItem(cacheKey);
+    if (!dataStr) return null;
+    return JSON.parse(dataStr);
+  } catch (error) {
+    console.error(`Error getting cached ${key}:`, error);
+    return null;
+  }
+}

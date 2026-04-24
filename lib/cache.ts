@@ -1,120 +1,199 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
 
-const CACHE_PREFIX = '@campus-map-cache:';
-const MAP_CACHE_KEY = 'map-overlay-cache';
+const CACHE_KEYS = {
+  MAP_URL: '@campus_map_url',
+  BUILDINGS: '@campus_buildings',
+  OFFICES: '@campus_offices',
+  NODES: '@campus_nodes',
+  EDGES: '@campus_edges',
+  APP_VERSION: '@campus_app_version',
+  LAST_SYNC: '@campus_last_sync',
+};
 
-interface CacheItem<T> {
-  data: T;
-  timestamp: number;
+export interface CachedData {
+  buildings: any[];
+  offices: any[];
+  nodes: any[];
+  edges: any[];
+  appVersion: number;
+  lastSync: string;
 }
 
 /**
- * Save data to local storage with a timestamp
+ * Cache the map image URL
+ * Note: React Native's Image component handles caching automatically
  */
-export async function saveToCache<T>(key: string, data: T): Promise<void> {
+export async function cacheMapImage(mapUrl: string): Promise<void> {
   try {
-    const item: CacheItem<T> = {
-      data,
-      timestamp: Date.now(),
-    };
-    await AsyncStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(item));
-    console.log(`[Cache] SAVED: key="${key}" (${JSON.stringify(data).length} bytes)`);
+    console.log('Caching map URL...');
+    await AsyncStorage.setItem(CACHE_KEYS.MAP_URL, mapUrl);
+    console.log('Map URL cached successfully');
   } catch (error) {
-    console.error(`[Cache] ERROR (Save): ${key}`, error);
+    console.error('Error caching map URL:', error);
+    throw error;
   }
 }
 
 /**
- * Retrieve data from local storage
+ * Get cached map image URL
  */
-export async function getFromCache<T>(key: string): Promise<T | null> {
+export async function getCachedMapImage(): Promise<string | null> {
   try {
-    const value = await AsyncStorage.getItem(`${CACHE_PREFIX}${key}`);
-    if (value !== null) {
-      const item: CacheItem<T> = JSON.parse(value);
-      const ageMs = Date.now() - item.timestamp;
-      console.log(`[Cache] HIT: key="${key}" age=${Math.round(ageMs/1000)}s (${Math.round(ageMs/60000)}min)`);
-      return item.data;
-    }
-    console.log(`[Cache] MISS: key="${key}"`);
-    return null;
+    return await AsyncStorage.getItem(CACHE_KEYS.MAP_URL);
   } catch (error) {
-    console.error(`[Cache] ERROR (Get): ${key}`, error);
+    console.error('Error getting cached map URL:', error);
     return null;
   }
 }
 
 /**
- * Check if the cache is older than the TTL (Time-To-Live in milliseconds)
- * Default TTL is 10 minutes (600,000 ms)
+ * Fetch and cache all data from Supabase
  */
-export async function isCacheStale(key: string, ttl: number = 600000): Promise<boolean> {
+export async function cacheAllData(): Promise<CachedData> {
   try {
-    const value = await AsyncStorage.getItem(`${CACHE_PREFIX}${key}`);
-    if (value === null) {
-      console.log(`[Cache] STALE: key="${key}" - no cache entry`);
-      return true;
-    }
+    console.log('Fetching all data from Supabase...');
     
-    const item: CacheItem<any> = JSON.parse(value);
-    const now = Date.now();
-    const ageMs = now - item.timestamp;
-    const isStale = ageMs > ttl;
-    console.log(`[Cache] AGE CHECK: key="${key}" age=${Math.round(ageMs/1000)}s, TTL=${ttl/1000}s, stale=${isStale}`);
-    return isStale;
-  } catch (error) {
-    console.error(`[Cache] ERROR (Stale check): ${key}`, error);
-    return true;
-  }
-}
+    // Fetch all data in parallel
+    const [buildingsResult, officesResult, nodesResult, edgesResult, versionResult] = await Promise.all([
+      supabase.from('buildings').select('*'),
+      supabase.from('offices').select('*'),
+      supabase.from('nav_nodes').select('*'),
+      supabase.from('nav_edges').select('*'),
+      supabase.from('app_version').select('*').single(),
+    ]);
 
-/**
- * Clear specific cache key
- */
-export async function clearCache(key: string): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(`${CACHE_PREFIX}${key}`);
-    console.log(`[Cache] CLEARED: key="${key}"`);
-  } catch (error) {
-    console.error(`[Cache] ERROR (Clear): ${key}`, error);
-  }
-}
+    if (buildingsResult.error) throw buildingsResult.error;
+    if (officesResult.error) throw officesResult.error;
+    if (nodesResult.error) throw nodesResult.error;
+    if (edgesResult.error) throw edgesResult.error;
+    if (versionResult.error) throw versionResult.error;
 
-/**
- * Save map overlay cache status
- */
-export async function saveMapCacheStatus(): Promise<void> {
-  try {
-    const item: CacheItem<boolean> = {
-      data: true,
-      timestamp: Date.now(),
+    const data: CachedData = {
+      buildings: buildingsResult.data || [],
+      offices: officesResult.data || [],
+      nodes: nodesResult.data || [],
+      edges: edgesResult.data || [],
+      appVersion: versionResult.data?.version || 1,
+      lastSync: new Date().toISOString(),
     };
-    await AsyncStorage.setItem(`${CACHE_PREFIX}${MAP_CACHE_KEY}`, JSON.stringify(item));
+
+    // Cache all data
+    await AsyncStorage.setItem(CACHE_KEYS.BUILDINGS, JSON.stringify(data.buildings));
+    await AsyncStorage.setItem(CACHE_KEYS.OFFICES, JSON.stringify(data.offices));
+    await AsyncStorage.setItem(CACHE_KEYS.NODES, JSON.stringify(data.nodes));
+    await AsyncStorage.setItem(CACHE_KEYS.EDGES, JSON.stringify(data.edges));
+    await AsyncStorage.setItem(CACHE_KEYS.APP_VERSION, String(data.appVersion));
+    await AsyncStorage.setItem(CACHE_KEYS.LAST_SYNC, data.lastSync);
+
+    console.log('All data cached successfully');
+    return data;
   } catch (error) {
-    console.error('Map Cache Error (Save):', error);
+    console.error('Error caching all data:', error);
+    throw error;
   }
 }
 
 /**
- * Check if map overlay is cached
+ * Get all cached data
  */
-export async function isMapCached(): Promise<boolean> {
+export async function getCachedData(): Promise<CachedData | null> {
   try {
-    const value = await AsyncStorage.getItem(`${CACHE_PREFIX}${MAP_CACHE_KEY}`);
-    return value !== null;
+    const [buildingsStr, officesStr, nodesStr, edgesStr, versionStr, lastSyncStr] = await Promise.all([
+      AsyncStorage.getItem(CACHE_KEYS.BUILDINGS),
+      AsyncStorage.getItem(CACHE_KEYS.OFFICES),
+      AsyncStorage.getItem(CACHE_KEYS.NODES),
+      AsyncStorage.getItem(CACHE_KEYS.EDGES),
+      AsyncStorage.getItem(CACHE_KEYS.APP_VERSION),
+      AsyncStorage.getItem(CACHE_KEYS.LAST_SYNC),
+    ]);
+
+    if (!buildingsStr || !officesStr || !nodesStr || !edgesStr || !versionStr || !lastSyncStr) {
+      return null;
+    }
+
+    return {
+      buildings: JSON.parse(buildingsStr),
+      offices: JSON.parse(officesStr),
+      nodes: JSON.parse(nodesStr),
+      edges: JSON.parse(edgesStr),
+      appVersion: parseInt(versionStr, 10),
+      lastSync: lastSyncStr,
+    };
   } catch (error) {
-    console.error('Map Cache Error (Check):', error);
-    return false;
+    console.error('Error getting cached data:', error);
+    return null;
   }
 }
 
 /**
- * Clear map cache
+ * Check if cached version matches server version
  */
-export async function clearMapCache(): Promise<void> {
+export async function checkVersion(): Promise<{ needsUpdate: boolean; serverVersion: number; cachedVersion: number }> {
   try {
-    await AsyncStorage.removeItem(`${CACHE_PREFIX}${MAP_CACHE_KEY}`);
+    // Get server version
+    const { data: versionData, error } = await supabase
+      .from('app_version')
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    const serverVersion = versionData?.version || 1;
+    const cachedVersionStr = await AsyncStorage.getItem(CACHE_KEYS.APP_VERSION);
+    const cachedVersion = cachedVersionStr ? parseInt(cachedVersionStr, 10) : 0;
+
+    return {
+      needsUpdate: serverVersion > cachedVersion,
+      serverVersion,
+      cachedVersion,
+    };
   } catch (error) {
-    console.error('Map Cache Error (Clear):', error);
+    console.error('Error checking version:', error);
+    return {
+      needsUpdate: true,
+      serverVersion: 1,
+      cachedVersion: 0,
+    };
+  }
+}
+
+/**
+ * Clear all cached data
+ */
+export async function clearCache(): Promise<void> {
+  try {
+    console.log('Clearing cache...');
+    
+    // Clear AsyncStorage
+    await AsyncStorage.multiRemove([
+      CACHE_KEYS.MAP_URL,
+      CACHE_KEYS.BUILDINGS,
+      CACHE_KEYS.OFFICES,
+      CACHE_KEYS.NODES,
+      CACHE_KEYS.EDGES,
+      CACHE_KEYS.APP_VERSION,
+      CACHE_KEYS.LAST_SYNC,
+    ]);
+
+    console.log('Cache cleared successfully');
+  } catch (error) {
+    console.error('Error clearing cache:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get map URL from Supabase
+ */
+export async function getMapUrl(): Promise<string> {
+  try {
+    // For now, use the public URL directly
+    // In production, this could be fetched from an API endpoint
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+    return `${supabaseUrl}/storage/v1/object/public/campus-map-images/map.png`;
+  } catch (error) {
+    console.error('Error getting map URL:', error);
+    throw error;
   }
 }

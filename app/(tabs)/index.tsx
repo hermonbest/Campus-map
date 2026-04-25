@@ -258,29 +258,29 @@ export default function Index() {
             style={styles.searchButton} 
             onPress={() => setSearchModalVisible(true)}
           >
-            <Text style={styles.refreshButtonText}>🔍 Search</Text>
+            <Text style={styles.primaryButtonText}>Search</Text>
           </TouchableOpacity>
           {(path || destinationBuildingId) && (
             <TouchableOpacity 
-              style={[styles.refreshButton, styles.clearRouteButton]} 
+              style={styles.secondaryButton} 
               onPress={handleClearRoute}
             >
-              <Text style={styles.refreshButtonText}>Clear Route</Text>
+              <Text style={styles.secondaryButtonText}>Clear</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity 
             style={styles.routeButton} 
             onPress={() => router.push('/route' as any)}
           >
-            <Text style={styles.refreshButtonText}>Navigate</Text>
+            <Text style={styles.primaryButtonText}>Navigate</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={styles.refreshButton} 
+            style={styles.secondaryButton} 
             onPress={handleRefresh}
             disabled={refreshing}
           >
-            <Text style={styles.refreshButtonText}>
-              {refreshing ? 'Refreshing...' : 'Refresh'}
+            <Text style={styles.secondaryButtonText}>
+              {refreshing ? 'Syncing...' : 'Sync'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -314,49 +314,57 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    padding: 16,
+    backgroundColor: '#18181B',
+    padding: 24,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   updateAvailable: {
-    color: '#10B981',
-    fontSize: 14,
+    color: '#A1A1AA',
+    fontSize: 10,
     fontWeight: '600',
-    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 16,
   },
   searchButton: {
-    backgroundColor: '#8B5CF6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 16,
     flex: 1,
   },
-  refreshButton: {
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+  secondaryButton: {
+    backgroundColor: '#27272A',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 16,
     flex: 1,
-  },
-  clearRouteButton: {
-    backgroundColor: '#EF4444',
   },
   routeButton: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 16,
     flex: 1,
   },
-  refreshButtonText: {
-    color: '#fff',
+  primaryButtonText: {
+    color: '#18181B',
     fontSize: 14,
     fontWeight: '600',
+    textAlign: 'center',
+  },
+  secondaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
     textAlign: 'center',
   },
 });

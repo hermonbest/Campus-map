@@ -65,8 +65,8 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress }: MapViewer
               style={[
                 styles.buildingMarker,
                 {
-                  left: building.x_pos * imageWidth - 20,
-                  top: building.y_pos * imageHeight - 20,
+                  left: building.x_pos * imageWidth - 15,
+                  top: building.y_pos * imageHeight - 15,
                   backgroundColor: building.color,
                 },
               ]}
@@ -94,9 +94,9 @@ const styles = StyleSheet.create({
   },
   buildingMarker: {
     position: 'absolute',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     borderWidth: 2,
     borderColor: '#fff',
     alignItems: 'center',

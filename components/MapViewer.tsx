@@ -1,7 +1,10 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { View, Image, StyleSheet, useWindowDimensions, StatusBar, Platform, ScrollView, TouchableOpacity, Text } from 'react-native';
 import Svg, { Polyline } from 'react-native-svg';
+import Animated, { useSharedValue, useAnimatedProps, withRepeat, withTiming, Easing, withSequence, runOnJS } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+
+const AnimatedPolyline = Animated.createAnimatedComponent(Polyline);
 
 interface Building {
   id: string;
@@ -64,6 +67,60 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
     ? pathCoordinates.map(coord => `${coord.x},${coord.y}`).join(' ')
     : '';
 
+  // Calculate total path length for the draw-in effect
+  const totalLength = useMemo(() => {
+    let len = 0;
+    for (let i = 1; i < pathCoordinates.length; i++) {
+      const dx = pathCoordinates[i].x - pathCoordinates[i-1].x;
+      const dy = pathCoordinates[i].y - pathCoordinates[i-1].y;
+      len += Math.sqrt(dx * dx + dy * dy);
+    }
+    return len;
+  }, [pathCoordinates]);
+
+  // Animation states
+  const dashOffset = useSharedValue(0);
+  const drawOffset = useSharedValue(0);
+  const dashOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (pathCoordinates.length > 1 && totalLength > 0) {
+      // 1. Setup initial states
+      dashOffset.value = 0;
+      drawOffset.value = totalLength;
+      dashOpacity.value = 0;
+
+      // 2. Start the "draw-in" effect for the solid background line
+      drawOffset.value = withTiming(
+        0, 
+        { duration: 1200, easing: Easing.out(Easing.cubic) },
+        (finished) => {
+          if (finished) {
+            // Fade in the marching ants after drawing finishes
+            dashOpacity.value = withTiming(1, { duration: 400 });
+          }
+        }
+      );
+
+      // 3. Start the marching ants continuous loop
+      // Pattern is 10, 5 -> total 15. Animate 0 to -15 for continuous loop.
+      dashOffset.value = withRepeat(
+        withTiming(-15, { duration: 600, easing: Easing.linear }),
+        -1,
+        false
+      );
+    }
+  }, [pathCoordinates.length, totalLength]);
+
+  const animatedBackgroundProps = useAnimatedProps(() => ({
+    strokeDashoffset: drawOffset.value,
+  }));
+
+  const animatedPolylineProps = useAnimatedProps(() => ({
+    strokeDashoffset: dashOffset.value,
+    opacity: dashOpacity.value,
+  }));
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -91,7 +148,20 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
               height={imageHeight}
               viewBox={`0 0 ${imageWidth} ${imageHeight}`}
             >
-              <Polyline
+              {/* Solid background line that "draws" in */}
+              <AnimatedPolyline
+                points={polylinePoints}
+                fill="none"
+                stroke="#10B981"
+                strokeOpacity="0.3"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray={`${totalLength}, ${totalLength}`}
+                animatedProps={animatedBackgroundProps}
+              />
+              {/* Marching ants foreground */}
+              <AnimatedPolyline
                 points={polylinePoints}
                 fill="none"
                 stroke="#10B981"
@@ -99,6 +169,7 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
                 strokeDasharray="10, 5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                animatedProps={animatedPolylineProps}
               />
             </Svg>
           )}

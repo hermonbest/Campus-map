@@ -85,92 +85,53 @@ export default function Index() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.showPath, params.pathNodes, params.destinationBuildingId, params.noPathMessage]);
 
-  const loadData = async () => {
+  const loadData = async (forceRefresh = false) => {
     try {
-      // Load map
-      const cachedUrl = await getCachedMapImage();
+      setLoading(true);
       
-      if (cachedUrl) {
-        setMapUrl(cachedUrl);
-      } else {
-        const url = await getMapUrl();
-        await cacheMapImage(url);
-        setMapUrl(url);
+      // Load map URL first (usually static)
+      let currentMapUrl = await getCachedMapImage();
+      if (!currentMapUrl || forceRefresh) {
+        currentMapUrl = await getMapUrl();
+        await cacheMapImage(currentMapUrl);
       }
+      setMapUrl(currentMapUrl);
 
-      // Load buildings
-      const cachedBuildings = await getCachedItem('buildings');
+      // Try to load all data from cache first
+      const cached = await getCachedData();
       
-      if (cachedBuildings) {
-        setBuildings(cachedBuildings);
-      } else {
-        const { data, error } = await supabase
-          .from('buildings')
-          .select('*')
-          .eq('is_active', true);
+      if (cached && !forceRefresh) {
+        console.log('Using cached campus data (v' + cached.appVersion + ')');
+        setBuildings(cached.buildings);
+        setNodes(cached.nodes);
+        setEdges(cached.edges);
         
-        if (error) throw error;
-        if (data) {
-          setBuildings(data);
-          await cacheData('buildings', data);
-        }
-      }
-
-      // Load buildings with offices for search
-      const cachedBuildingsWithOffices = await getCachedItem('buildings_with_offices');
-      
-      if (cachedBuildingsWithOffices) {
-        setBuildingsWithOffices(cachedBuildingsWithOffices);
+        // Load buildings with offices separately if not in main cache
+        const cachedWithOffices = await getCachedItem('buildings_with_offices');
+        if (cachedWithOffices) setBuildingsWithOffices(cachedWithOffices);
       } else {
-        const { data, error } = await supabase
+        // Full sync required
+        console.log('Performing full sync with server...');
+        const freshData = await cacheAllData();
+        setBuildings(freshData.buildings);
+        setNodes(freshData.nodes);
+        setEdges(freshData.edges);
+        
+        // Sync buildings with offices
+        const { data: withOffices, error } = await supabase
           .from('buildings')
           .select('*, offices(*)')
           .eq('is_active', true);
         
-        if (error) throw error;
-        if (data) {
-          setBuildingsWithOffices(data);
-          await cacheData('buildings_with_offices', data);
-        }
-      }
-
-      // Load nodes
-      const cachedNodes = await getCachedItem('nodes');
-      
-      if (cachedNodes) {
-        setNodes(cachedNodes);
-      } else {
-        const { data, error } = await supabase
-          .from('nav_nodes')
-          .select('*');
-        
-        if (error) throw error;
-        if (data) {
-          setNodes(data);
-          await cacheData('nodes', data);
-        }
-      }
-
-      // Load edges
-      const cachedEdges = await getCachedItem('edges');
-      
-      if (cachedEdges) {
-        setEdges(cachedEdges);
-      } else {
-        const { data, error } = await supabase
-          .from('nav_edges')
-          .select('*');
-        
-        if (error) throw error;
-        if (data) {
-          setEdges(data);
-          await cacheData('edges', data);
+        if (!error && withOffices) {
+          setBuildingsWithOffices(withOffices);
+          await cacheData('buildings_with_offices', withOffices);
         }
       }
 
       setLoading(false);
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading campus data:', error);
       setLoading(false);
     }
   };
@@ -186,8 +147,14 @@ export default function Index() {
         serverVersion: versionCheck.serverVersion,
         cachedVersion: versionCheck.cachedVersion,
       });
+
+      if (versionCheck.needsUpdate) {
+        console.log(`Update available: v${versionCheck.serverVersion}. Syncing...`);
+        // Subtle update in background
+        await loadData(true);
+      }
     } catch (error) {
-      console.error('Error checking version:', error);
+      console.error('Background update check failed:', error);
     }
   };
 

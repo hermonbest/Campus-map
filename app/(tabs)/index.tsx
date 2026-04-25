@@ -55,6 +55,7 @@ export default function Index() {
   const [noPathMessage, setNoPathMessage] = useState<string | null>(null);
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [buildingsWithOffices, setBuildingsWithOffices] = useState<Building[]>([]);
+  const [centerOnBuilding, setCenterOnBuilding] = useState<Building | null>(null);
 
   useEffect(() => {
     loadData();
@@ -182,13 +183,14 @@ export default function Index() {
   };
 
   const handleSearchResultSelect = (building: Building, office?: any) => {
-    if (office) {
-      // If an office was selected, navigate to building details
-      router.push(`/building-details?buildingId=${building.id}`);
-    } else {
-      // If a building was selected, navigate to building details
-      router.push(`/building-details?buildingId=${building.id}`);
-    }
+    // Center map on the selected building instead of redirecting
+    setCenterOnBuilding(building);
+    setSearchModalVisible(false);
+    
+    // Clear the centerOnBuilding after animation completes (2 seconds)
+    setTimeout(() => {
+      setCenterOnBuilding(null);
+    }, 2000);
   };
 
   if (loading) {
@@ -218,6 +220,7 @@ export default function Index() {
         nodes={nodes}
         destinationBuildingId={destinationBuildingId || undefined}
         noPathMessage={noPathMessage || undefined}
+        centerOnBuilding={centerOnBuilding}
       />
       <View style={[styles.floatingControls, { top: insets.top + 10 }]}>
         <TouchableOpacity 

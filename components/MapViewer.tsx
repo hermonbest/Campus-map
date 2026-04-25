@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useMemo } from 'react';
 import { View, Image, StyleSheet, useWindowDimensions, StatusBar, Platform, ScrollView, TouchableOpacity, Text } from 'react-native';
-import Svg, { Polyline } from 'react-native-svg';
-import Animated, { useSharedValue, useAnimatedProps, withRepeat, withTiming, Easing, withSequence, runOnJS } from 'react-native-reanimated';
+import Svg, { Polyline, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Animated, { useSharedValue, useAnimatedProps, withRepeat, withTiming, Easing, withSequence, runOnJS, withSpring } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 
 const AnimatedPolyline = Animated.createAnimatedComponent(Polyline);
@@ -30,12 +30,14 @@ interface MapViewerProps {
   nodes?: Array<{ id: string; x_pos: number; y_pos: number }>; // All nodes for coordinate lookup
   destinationBuildingId?: string; // Building ID to highlight when no path exists
   noPathMessage?: string; // Message to display when no path exists
+  centerOnBuilding?: Building | null; // Building to center on with animation
 }
 
-export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes = [], destinationBuildingId, noPathMessage }: MapViewerProps) {
+export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes = [], destinationBuildingId, noPathMessage, centerOnBuilding }: MapViewerProps) {
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const scrollViewRef = useRef<ScrollView>(null);
-  
+  const pulsingScale = useSharedValue(1);
+
   const androidStatusBarHeight = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
   const availableHeight = SCREEN_HEIGHT - androidStatusBarHeight;
 
@@ -50,16 +52,35 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
     scrollViewRef.current?.scrollTo({ x: middlePosition, y: 0, animated: false });
   }, [imageWidth, SCREEN_WIDTH]);
 
+  // Center on building when centerOnBuilding prop changes
+  useEffect(() => {
+    if (centerOnBuilding) {
+      const targetX = centerOnBuilding.x_pos * imageWidth;
+      const scrollX = targetX - SCREEN_WIDTH / 2;
+      scrollViewRef.current?.scrollTo({ x: scrollX, y: 0, animated: true });
+
+      // Trigger pulsing animation
+      pulsingScale.value = withSequence(
+        withTiming(1.5, { duration: 300, easing: Easing.out(Easing.ease) }),
+        withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.3, { duration: 200, easing: Easing.out(Easing.ease) }),
+        withTiming(1, { duration: 200, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.2, { duration: 150, easing: Easing.out(Easing.ease) }),
+        withTiming(1, { duration: 150, easing: Easing.inOut(Easing.ease) })
+      );
+    }
+  }, [centerOnBuilding, imageWidth, SCREEN_WIDTH]);
+
   // Calculate path coordinates from node IDs
-  const pathCoordinates = path && nodes.length > 0 
+  const pathCoordinates = path && nodes.length > 0
     ? path.map(nodeId => {
-        const node = nodes.find(n => n.id === nodeId);
-        if (!node) return null;
-        return {
-          x: Number(node.x_pos) * imageWidth,
-          y: Number(node.y_pos) * imageHeight,
-        };
-      }).filter(Boolean) as Array<{ x: number; y: number }>
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return null;
+      return {
+        x: Number(node.x_pos) * imageWidth,
+        y: Number(node.y_pos) * imageHeight,
+      };
+    }).filter(Boolean) as Array<{ x: number; y: number }>
     : [];
 
   // Convert coordinates to polyline points string
@@ -71,8 +92,8 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
   const totalLength = useMemo(() => {
     let len = 0;
     for (let i = 1; i < pathCoordinates.length; i++) {
-      const dx = pathCoordinates[i].x - pathCoordinates[i-1].x;
-      const dy = pathCoordinates[i].y - pathCoordinates[i-1].y;
+      const dx = pathCoordinates[i].x - pathCoordinates[i - 1].x;
+      const dy = pathCoordinates[i].y - pathCoordinates[i - 1].y;
       len += Math.sqrt(dx * dx + dy * dy);
     }
     return len;
@@ -88,11 +109,11 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
       // 1. Setup initial states
       dashOffset.value = 0;
       drawOffset.value = totalLength;
-      dashOpacity.value = 0;
+      dashOpacity.value = 1;
 
       // 2. Start the "draw-in" effect for the solid background line
       drawOffset.value = withTiming(
-        0, 
+        0,
         { duration: 1200, easing: Easing.out(Easing.cubic) },
         (finished) => {
           if (finished) {
@@ -139,58 +160,85 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
             }}
             resizeMode="cover"
           />
-          
+
           {/* Render path using SVG */}
           {pathCoordinates.length > 1 && (
-            <Svg 
-              style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]} 
-              width={imageWidth} 
-              height={imageHeight}
-              viewBox={`0 0 ${imageWidth} ${imageHeight}`}
-            >
-              {/* Solid background line that "draws" in */}
-              <AnimatedPolyline
-                points={polylinePoints}
-                fill="none"
-                stroke="#10B981"
-                strokeOpacity="0.3"
-                strokeWidth="4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeDasharray={`${totalLength}, ${totalLength}`}
-                animatedProps={animatedBackgroundProps}
-              />
-              {/* Marching ants foreground */}
-              <AnimatedPolyline
-                points={polylinePoints}
-                fill="none"
-                stroke="#10B981"
-                strokeWidth="4"
-                strokeDasharray="10, 5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                animatedProps={animatedPolylineProps}
-              />
-            </Svg>
+            <>
+              {/* Debug logs for development */}
+              {(() => {
+                console.log(`[MAP_VIEWER] Rendering path with ${pathCoordinates.length} points, length: ${totalLength.toFixed(2)}`);
+                console.log(`[MAP_VIEWER] Polyline points: ${polylinePoints.substring(0, 100)}...`);
+                return null;
+              })()}
+              <Svg
+                style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}
+                width={imageWidth}
+                height={imageHeight}
+                viewBox={`0 0 ${imageWidth} ${imageHeight}`}
+                pointerEvents="none"
+              >
+                {/* 1. Solid background line (always visible) */}
+                <Polyline
+                  points={polylinePoints}
+                  fill="none"
+                  stroke="#000000ff"
+                  strokeOpacity="0.2"
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {/* 2. Main path line with draw-in effect */}
+                <AnimatedPolyline
+                  points={polylinePoints}
+                  fill="none"
+                  stroke="#000000ff"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={`${totalLength}, ${totalLength}`}
+                  animatedProps={animatedBackgroundProps}
+                />
+                {/* 3. Marching ants foreground */}
+                <AnimatedPolyline
+                  points={polylinePoints}
+                  fill="none"
+                  stroke="#9df70dff"
+                  strokeWidth="2"
+                  strokeDasharray="10, 5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  animatedProps={animatedPolylineProps}
+                />
+              </Svg>
+            </>
           )}
-          
-          {buildings.map((building) => (
-            <TouchableOpacity
-              key={building.id}
-              style={[
-                styles.buildingMarker,
-                {
-                  left: building.x_pos * imageWidth - 12,
-                  top: building.y_pos * imageHeight - 12,
-                  backgroundColor: building.color,
-                },
-                destinationBuildingId === building.id && styles.destinationMarker,
-              ]}
-              onPress={() => onBuildingPress?.(building)}
-            >
-              <Ionicons name="business" size={12} color="#FAFAFA" />
-            </TouchableOpacity>
-          ))}
+
+          {buildings.map((building) => {
+            const isSelected = centerOnBuilding?.id === building.id;
+            return (
+              <Animated.View
+                key={building.id}
+                style={[
+                  styles.buildingMarker,
+                  {
+                    left: building.x_pos * imageWidth - 12,
+                    top: building.y_pos * imageHeight - 12,
+                    backgroundColor: building.color,
+                    transform: [{ scale: isSelected ? pulsingScale : 1 }],
+                  },
+                  destinationBuildingId === building.id && styles.destinationMarker,
+                  isSelected && styles.pulsingMarker,
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={() => onBuildingPress?.(building)}
+                  style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Ionicons name="business" size={12} color="#FAFAFA" />
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })}
 
           {/* No-path message overlay */}
           {noPathMessage && destinationBuildingId && (
@@ -238,6 +286,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 12,
+  },
+  pulsingMarker: {
+    borderWidth: 4,
+    borderColor: '#10B981',
+    shadowColor: '#10B981',
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    elevation: 16,
+    zIndex: 100,
   },
   buildingMarkerText: {
     color: '#FAFAFA',

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Office {
   id: string;
@@ -86,7 +87,7 @@ export default function BuildingDetails() {
 
         <View style={styles.header}>
           <View style={[styles.colorBadge, { backgroundColor: building.color }]}>
-            <Text style={styles.badgeText}>B</Text>
+            <Ionicons name="business" size={32} color="#FFFFFF" />
           </View>
           <Text style={styles.buildingName}>{building.name}</Text>
         </View>
@@ -152,18 +153,18 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(226,232,240,0.5)',
   },
   colorBadge: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
+    width: 72,
+    height: 72,
+    borderRadius: 20,
     borderWidth: 4,
-    borderColor: '#FAFAFA',
+    borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
     elevation: 8,
   },
   badgeText: {

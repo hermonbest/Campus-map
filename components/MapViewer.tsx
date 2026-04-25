@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Image, StyleSheet, useWindowDimensions, StatusBar, Platform, ScrollView, TouchableOpacity, Text } from 'react-native';
 import Svg, { Polyline } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Building {
   id: string;
@@ -108,15 +109,15 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
               style={[
                 styles.buildingMarker,
                 {
-                  left: building.x_pos * imageWidth - 15,
-                  top: building.y_pos * imageHeight - 15,
+                  left: building.x_pos * imageWidth - 12,
+                  top: building.y_pos * imageHeight - 12,
                   backgroundColor: building.color,
                 },
                 destinationBuildingId === building.id && styles.destinationMarker,
               ]}
               onPress={() => onBuildingPress?.(building)}
             >
-              <Text style={styles.buildingMarkerText}>B</Text>
+              <Ionicons name="business" size={12} color="#FAFAFA" />
             </TouchableOpacity>
           ))}
 
@@ -145,26 +146,27 @@ const styles = StyleSheet.create({
   },
   buildingMarker: {
     position: 'absolute',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 24,
+    height: 24,
+    borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#FAFAFA',
+    borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
     elevation: 8,
   },
   destinationMarker: {
     borderWidth: 3,
-    borderColor: '#18181B',
-    transform: [{ scale: 1.15 }],
+    borderColor: '#FFFFFF',
+    transform: [{ scale: 1.25 }],
     shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 12,
   },
   buildingMarkerText: {
     color: '#FAFAFA',

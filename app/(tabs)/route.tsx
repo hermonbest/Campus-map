@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { getCachedItem } from '../../lib/cache';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { dijkstra } from '../../lib/dijkstra';
 
@@ -63,9 +65,11 @@ export default function RouteScreen() {
   const [noPath, setNoPath] = useState(false);
   const [destinationBuilding, setDestinationBuilding] = useState<Building | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const loadData = async () => {
     try {
@@ -168,9 +172,27 @@ export default function RouteScreen() {
         console.log('[ROUTE] Total distance:', result.totalDistance);
         setPath(result.path);
         setTotalDistance(result.totalDistance);
+        
+        // Redirect to map immediately
+        router.push({
+          pathname: '/',
+          params: {
+            showPath: 'true',
+            pathNodes: JSON.stringify(result.path),
+          },
+        });
       } else {
         console.error('[ROUTE] No path found');
         setNoPath(true);
+        
+        // Redirect to map immediately but show destination building
+        router.push({
+          pathname: '/',
+          params: {
+            destinationBuildingId: destBuilding.id,
+            noPathMessage: `No direct path found to ${destBuilding.name}`,
+          },
+        });
       }
     } catch (error) {
       console.error('[ROUTE] Error calculating route:', error);
@@ -180,17 +202,6 @@ export default function RouteScreen() {
     }
   };
 
-  const handleNavigateToMap = () => {
-    if (path) {
-      router.push({
-        pathname: '/',
-        params: {
-          showPath: 'true',
-          pathNodes: JSON.stringify(path),
-        },
-      });
-    }
-  };
 
   if (loading) {
     return (
@@ -215,7 +226,7 @@ export default function RouteScreen() {
         {/* Start Building Selection */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Start Building</Text>
-          <ScrollView style={styles.listContainer}>
+          <View style={styles.listContainer}>
             {buildings.map((building) => (
               <TouchableOpacity
                 key={building.id}
@@ -225,14 +236,16 @@ export default function RouteScreen() {
                 ]}
                 onPress={() => setSelectedStartBuilding(building)}
               >
-                <View style={[styles.colorDot, { backgroundColor: building.color }]} />
+                <View style={[styles.colorDot, { backgroundColor: building.color }]}>
+                  <Ionicons name="business" size={12} color="#FFFFFF" />
+                </View>
                 <Text style={styles.listItemText}>{building.name}</Text>
                 {selectedStartBuilding?.id === building.id && (
                   <Text style={styles.checkmark}>✓</Text>
                 )}
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
         </View>
 
         {/* Destination Type Selection */}
@@ -277,7 +290,7 @@ export default function RouteScreen() {
           <Text style={styles.sectionTitle}>
             {destinationType === 'office' ? 'Destination Office' : 'Destination Building'}
           </Text>
-          <ScrollView style={styles.listContainer}>
+          <View style={styles.listContainer}>
             {destinationType === 'office' ? (
               offices.length === 0 ? (
                 <Text style={styles.emptyText}>No offices available</Text>
@@ -313,7 +326,9 @@ export default function RouteScreen() {
                   ]}
                   onPress={() => setSelectedDestinationBuilding(building)}
                 >
-                  <View style={[styles.colorDot, { backgroundColor: building.color }]} />
+                  <View style={[styles.colorDot, { backgroundColor: building.color }]}>
+                    <Ionicons name="business" size={12} color="#FFFFFF" />
+                  </View>
                   <Text style={styles.listItemText}>{building.name}</Text>
                   {selectedDestinationBuilding?.id === building.id && (
                     <Text style={styles.checkmark}>✓</Text>
@@ -321,7 +336,7 @@ export default function RouteScreen() {
                 </TouchableOpacity>
               ))
             )}
-          </ScrollView>
+          </View>
         </View>
 
         {/* Calculate Button */}
@@ -345,54 +360,6 @@ export default function RouteScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Route Result */}
-        {path && (
-          <View style={styles.resultSection}>
-            <Text style={styles.resultTitle}>Route Found!</Text>
-            <Text style={styles.resultText}>
-              Total distance: {Math.round(totalDistance)} pixels
-            </Text>
-            <Text style={styles.resultText}>
-              {path.length} nodes in path
-            </Text>
-            <TouchableOpacity
-              style={styles.navigateButton}
-              onPress={handleNavigateToMap}
-            >
-              <Text style={styles.navigateButtonText}>View on Map</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {noPath && destinationBuilding && (
-          <View style={styles.resultSection}>
-            <Text style={styles.resultTitle}>No Direct Path Available</Text>
-            <Text style={styles.resultText}>
-              Destination: {destinationBuilding.name}
-            </Text>
-            {selectedDestinationOffice && (
-              <>
-                <Text style={styles.resultText}>
-                  Office: {selectedDestinationOffice.staff_name}
-                </Text>
-                {selectedDestinationOffice.floor && (
-                  <Text style={styles.resultText}>
-                    Floor: {selectedDestinationOffice.floor}
-                  </Text>
-                )}
-              </>
-            )}
-            <Text style={styles.hintText}>
-              The destination building location is shown on the map
-            </Text>
-            <TouchableOpacity
-              style={styles.navigateButton}
-              onPress={() => router.push('/')}
-            >
-              <Text style={styles.navigateButtonText}>View on Map</Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </ScrollView>
     </View>
   );
@@ -450,7 +417,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   listContainer: {
-    maxHeight: 240,
+    // Height determined by content to allow outer ScrollView to handle scrolling
   },
   listItem: {
     flexDirection: 'row',
@@ -466,10 +433,12 @@ const styles = StyleSheet.create({
     borderColor: '#FAFAFA',
   },
   colorDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 24,
+    height: 24,
+    borderRadius: 8,
     marginRight: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listItemText: {
     color: '#FAFAFA',
@@ -510,44 +479,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: -0.2,
-  },
-  resultSection: {
-    margin: 24,
-    padding: 24,
-    backgroundColor: '#27272A',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  resultTitle: {
-    color: '#FAFAFA',
-    fontSize: 18,
-    fontWeight: '500',
-    marginBottom: 12,
-    letterSpacing: -0.3,
-  },
-  resultText: {
-    color: '#A1A1AA',
-    fontSize: 15,
-    marginBottom: 6,
-  },
-  hintText: {
-    color: '#71717A',
-    fontSize: 13,
-    marginTop: 12,
-    marginBottom: 20,
-  },
-  navigateButton: {
-    backgroundColor: '#FAFAFA',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  navigateButtonText: {
-    color: '#18181B',
-    fontSize: 14,
-    fontWeight: '600',
   },
   typeSelector: {
     flexDirection: 'row',

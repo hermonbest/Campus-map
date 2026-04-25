@@ -11,6 +11,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Office {
   id: string;
@@ -184,9 +185,11 @@ export function SearchModal({ visible, onClose, buildings, onSelect }: SearchMod
                           { backgroundColor: result.building.color },
                         ]}
                       >
-                        <Text style={styles.resultIconText}>
-                          {result.type === 'building' ? 'B' : 'O'}
-                        </Text>
+                        <Ionicons 
+                          name={result.type === 'building' ? 'business' : 'briefcase'} 
+                          size={20} 
+                          color="#FFFFFF" 
+                        />
                       </View>
                     </View>
                     <View style={styles.resultTextContainer}>

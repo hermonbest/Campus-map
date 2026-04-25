@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapViewer } from '../../components/MapViewer';
 import { SearchModal } from '../../components/SearchModal';
 import { getCachedMapImage, getMapUrl, cacheMapImage, getCachedItem, cacheData, checkVersion, clearCache, getCachedData, cacheAllData } from '../../lib/cache';
@@ -39,6 +41,7 @@ interface Edge {
 
 export default function Index() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const [mapUrl, setMapUrl] = useState<string | null>(null);
   const [buildings, setBuildings] = useState<Building[]>([]);
@@ -249,42 +252,37 @@ export default function Index() {
         destinationBuildingId={destinationBuildingId || undefined}
         noPathMessage={noPathMessage || undefined}
       />
-      <View style={styles.refreshBar}>
-        {versionInfo && versionInfo.serverVersion > versionInfo.cachedVersion && (
-          <Text style={styles.updateAvailable}>Update available (v{versionInfo.serverVersion})</Text>
-        )}
-        <View style={styles.buttonRow}>
-          <TouchableOpacity 
-            style={styles.searchButton} 
-            onPress={() => setSearchModalVisible(true)}
-          >
-            <Text style={styles.primaryButtonText}>Search</Text>
-          </TouchableOpacity>
-          {(path || destinationBuildingId) && (
-            <TouchableOpacity 
-              style={styles.secondaryButton} 
-              onPress={handleClearRoute}
-            >
-              <Text style={styles.secondaryButtonText}>Clear</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity 
-            style={styles.routeButton} 
-            onPress={() => router.push('/route' as any)}
-          >
-            <Text style={styles.primaryButtonText}>Navigate</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.secondaryButton} 
-            onPress={handleRefresh}
-            disabled={refreshing}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {refreshing ? 'Syncing...' : 'Sync'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+      <View style={[styles.floatingControls, { top: insets.top + 10 }]}>
+        <TouchableOpacity 
+          style={styles.searchBarContainer} 
+          onPress={() => setSearchModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="search" size={20} color="#A1A1AA" style={{ marginRight: 12 }} />
+          <Text style={styles.searchBarText}>Search campus, offices...</Text>
+        </TouchableOpacity>
       </View>
+
+      <TouchableOpacity 
+        style={[styles.floatingRefreshButton, { bottom: insets.bottom + 20 }]} 
+        onPress={handleRefresh}
+        disabled={refreshing}
+      >
+        {refreshing ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <Ionicons name="refresh" size={24} color="#FFFFFF" />
+        )}
+      </TouchableOpacity>
+
+      {path && (
+        <TouchableOpacity 
+          style={[styles.clearRouteButton, { bottom: insets.bottom + 80 }]} 
+          onPress={handleClearRoute}
+        >
+          <Ionicons name="close" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
       <SearchModal
         visible={searchModalVisible}
         onClose={() => setSearchModalVisible(false)}
@@ -309,62 +307,64 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
   },
-  refreshBar: {
+  floatingControls: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#18181B',
-    padding: 24,
-    paddingBottom: 40,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    left: 20,
+    right: 20,
+    zIndex: 100,
   },
-  buttonRow: {
+  searchBarContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    backgroundColor: 'rgba(24, 24, 27, 0.75)',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
   },
-  updateAvailable: {
+  searchBarText: {
     color: '#A1A1AA',
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-    marginBottom: 16,
-  },
-  searchButton: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 16,
-    flex: 1,
-  },
-  secondaryButton: {
-    backgroundColor: '#27272A',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 16,
-    flex: 1,
-  },
-  routeButton: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 16,
-    flex: 1,
-  },
-  primaryButtonText: {
-    color: '#18181B',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  secondaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
-    textAlign: 'center',
+  },
+  floatingRefreshButton: {
+    position: 'absolute',
+    right: 20,
+    backgroundColor: 'rgba(24, 24, 27, 0.85)',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  clearRouteButton: {
+    position: 'absolute',
+    right: 20,
+    backgroundColor: 'rgba(239, 68, 68, 0.85)',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
   },
 });

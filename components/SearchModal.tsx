@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 interface Office {
   id: string;
+  building_id: string;
   room_number: string;
   staff_name: string;
   floor: number | null;
@@ -24,10 +25,16 @@ interface Building {
   id: string;
   name: string;
   description: string | null;
+  image_url: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  hours: string | null;
   x_pos: number;
   y_pos: number;
   color: string;
   icon_type: string;
+  entrance_node_id: string | null;
   offices?: Office[];
 }
 

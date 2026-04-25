@@ -27,6 +27,12 @@ interface Office {
 interface Building {
   id: string;
   name: string;
+  description: string | null;
+  image_url?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  hours?: string | null;
   color: string;
   icon_type: string;
   x_pos: number;

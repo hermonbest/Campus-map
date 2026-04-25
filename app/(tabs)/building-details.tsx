@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, ScrollView, ActivityIndicator, TouchableOpacity, Image, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 
 interface Office {
   id: string;
+  building_id: string;
   room_number: string;
   staff_name: string;
   floor: number | null;
@@ -19,6 +20,12 @@ interface Building {
   y_pos: number;
   color: string;
   icon_type: string;
+  entrance_node_id: string | null;
+  image_url: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  hours: string | null;
   offices?: Office[];
 }
 
@@ -85,12 +92,73 @@ export default function BuildingDetails() {
           <Text style={styles.backButtonText}>← Back to Map</Text>
         </TouchableOpacity>
 
+        {building.image_url && (
+          <Image 
+            source={{ uri: building.image_url }} 
+            style={styles.buildingImage}
+            resizeMode="cover"
+          />
+        )}
+
         <View style={styles.header}>
           <View style={[styles.colorBadge, { backgroundColor: building.color }]}>
             <Ionicons name="business" size={32} color="#FFFFFF" />
           </View>
           <Text style={styles.buildingName}>{building.name}</Text>
         </View>
+
+        {(building.hours || building.phone || building.email || building.website) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Details</Text>
+            <View style={styles.detailsGrid}>
+              {building.hours && (
+                <View style={styles.detailItem}>
+                  <Ionicons name="time-outline" size={20} color="#71717A" />
+                  <View style={styles.detailTextContent}>
+                    <Text style={styles.detailLabel}>Hours</Text>
+                    <Text style={styles.detailValue}>{building.hours}</Text>
+                  </View>
+                </View>
+              )}
+              {building.phone && (
+                <TouchableOpacity 
+                  style={styles.detailItem}
+                  onPress={() => Linking.openURL(`tel:${building.phone}`)}
+                >
+                  <Ionicons name="call-outline" size={20} color="#3B82F6" />
+                  <View style={styles.detailTextContent}>
+                    <Text style={styles.detailLabel}>Phone</Text>
+                    <Text style={[styles.detailValue, { color: '#3B82F6' }]}>{building.phone}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              {building.email && (
+                <TouchableOpacity 
+                  style={styles.detailItem}
+                  onPress={() => Linking.openURL(`mailto:${building.email}`)}
+                >
+                  <Ionicons name="mail-outline" size={20} color="#3B82F6" />
+                  <View style={styles.detailTextContent}>
+                    <Text style={styles.detailLabel}>Email</Text>
+                    <Text style={[styles.detailValue, { color: '#3B82F6' }]}>{building.email}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              {building.website && (
+                <TouchableOpacity 
+                  style={styles.detailItem}
+                  onPress={() => Linking.openURL(building.website!)}
+                >
+                  <Ionicons name="globe-outline" size={20} color="#3B82F6" />
+                  <View style={styles.detailTextContent}>
+                    <Text style={styles.detailLabel}>Website</Text>
+                    <Text style={[styles.detailValue, { color: '#3B82F6' }]}>Visit Website</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
 
         {building.description && (
           <View style={styles.section}>
@@ -144,6 +212,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: -0.2,
   },
+  buildingImage: {
+    width: '100%',
+    height: 250,
+    backgroundColor: '#E4E4E7',
+  },
   header: {
     paddingHorizontal: 24,
     paddingVertical: 40,
@@ -174,9 +247,34 @@ const styles = StyleSheet.create({
   },
   buildingName: {
     fontSize: 28,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#18181B',
     letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  detailsGrid: {
+    gap: 20,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  detailTextContent: {
+    flex: 1,
+  },
+  detailLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#A1A1AA',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  detailValue: {
+    fontSize: 15,
+    color: '#3F3F46',
+    fontWeight: '500',
   },
   section: {
     paddingHorizontal: 24,

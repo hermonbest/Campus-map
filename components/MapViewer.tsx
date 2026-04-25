@@ -10,22 +10,31 @@ interface Building {
   id: string;
   name: string;
   description: string | null;
+  image_url: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  hours: string | null;
   x_pos: number;
   y_pos: number;
   color: string;
   icon_type: string;
-  offices?: Array<{
-    id: string;
-    room_number: string;
-    staff_name: string;
-    floor: number | null;
-  }>;
+  entrance_node_id: string | null;
+  offices?: Office[];
+}
+
+interface Office {
+  id: string;
+  building_id: string;
+  room_number: string;
+  staff_name: string;
+  floor: number | null;
 }
 
 interface MapViewerProps {
   mapUrl: string;
   buildings?: Building[];
-  onBuildingPress?: (building: Building) => void;
+  onBuildingPress?: (building: Building) => void | Promise<void>;
   path?: string[]; // Array of node IDs for the path
   nodes?: Array<{ id: string; x_pos: number; y_pos: number }>; // All nodes for coordinate lookup
   destinationBuildingId?: string; // Building ID to highlight when no path exists

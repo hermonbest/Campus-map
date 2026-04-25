@@ -85,12 +85,14 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
           {/* Render path using SVG */}
           {pathCoordinates.length > 1 && (
             <Svg 
-              style={StyleSheet.absoluteFill} 
+              style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]} 
               width={imageWidth} 
               height={imageHeight}
+              viewBox={`0 0 ${imageWidth} ${imageHeight}`}
             >
               <Polyline
                 points={polylinePoints}
+                fill="none"
                 stroke="#10B981"
                 strokeWidth="4"
                 strokeDasharray="10, 5"

@@ -60,18 +60,24 @@ export default function Index() {
     if (params.showPath === 'true' && params.pathNodes) {
       try {
         const pathNodes = JSON.parse(params.pathNodes as string);
-        setPath(pathNodes);
+        // Only update if path is different
+        const currentPathStr = path ? JSON.stringify(path) : '';
+        const newPathStr = JSON.stringify(pathNodes);
+        if (currentPathStr !== newPathStr) {
+          setPath(pathNodes);
+        }
       } catch (error) {
         console.error('Error parsing path nodes:', error);
       }
     }
-    if (params.destinationBuildingId) {
+    if (params.destinationBuildingId && params.destinationBuildingId !== destinationBuildingId) {
       setDestinationBuildingId(params.destinationBuildingId as string);
     }
-    if (params.noPathMessage) {
+    if (params.noPathMessage && params.noPathMessage !== noPathMessage) {
       setNoPathMessage(params.noPathMessage as string);
     }
-  }, [params]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.showPath, params.pathNodes, params.destinationBuildingId, params.noPathMessage]);
 
   const loadData = async () => {
     try {

@@ -2,6 +2,7 @@ interface Node {
   id: string;
   x_pos: number;
   y_pos: number;
+  is_building_entrance?: boolean;
 }
 
 interface Edge {
@@ -30,11 +31,7 @@ export function dijkstra(
   nodes: Node[],
   edges: Edge[]
 ): DijkstraResult | null {
-  console.log('[DIJKSTRA] Starting path calculation');
-  console.log('[DIJKSTRA] Start node:', startNodeId);
-  console.log('[DIJKSTRA] End node:', endNodeId);
-  console.log('[DIJKSTRA] Total nodes:', nodes.length);
-  console.log('[DIJKSTRA] Total edges:', edges.length);
+  console.log('[DIJKSTRA] Starting path calculation from', startNodeId, 'to', endNodeId);
 
   // Check if start and end nodes exist
   const startNode = nodes.find(n => n.id === startNodeId);
@@ -49,8 +46,6 @@ export function dijkstra(
     return null;
   }
 
-  console.log('[DIJKSTRA] Start node coordinates:', { x: startNode.x_pos, y: startNode.y_pos });
-  console.log('[DIJKSTRA] End node coordinates:', { x: endNode.x_pos, y: endNode.y_pos });
 
   // Create adjacency list from edges (bi-directional)
   const adjacencyList = new Map<string, Array<{ nodeId: string; weight: number }>>();
@@ -72,9 +67,7 @@ export function dijkstra(
     adjacencyList.set(edge.node_b, neighborsB);
   });
 
-  console.log('[DIJKSTRA] Adjacency list built');
-  console.log('[DIJKSTRA] Start node neighbors:', adjacencyList.get(startNodeId));
-  console.log('[DIJKSTRA] End node neighbors:', adjacencyList.get(endNodeId));
+  console.log('[DIJKSTRA] Adjacency list built with', adjacencyList.size, 'nodes');
   
   // Initialize distances and previous nodes
   const distances = new Map<string, number>();
@@ -95,12 +88,13 @@ export function dijkstra(
   
   while (unvisited.size > 0) {
     iterations++;
+    
     // Find unvisited node with smallest distance
     let currentNode: string | null = null;
     let smallestDistance = Infinity;
     
     for (const nodeId of unvisited) {
-      const distance = distances.get(nodeId) || Infinity;
+      const distance = distances.get(nodeId) ?? Infinity;
       if (distance < smallestDistance) {
         smallestDistance = distance;
         currentNode = nodeId;
@@ -110,40 +104,32 @@ export function dijkstra(
     // If no more reachable nodes or we reached the destination
     if (currentNode === null || smallestDistance === Infinity) {
       console.log('[DIJKSTRA] No more reachable nodes. Stopping.');
-      console.log('[DIJKSTRA] Unvisited nodes:', Array.from(unvisited));
       break;
     }
     
     if (currentNode === endNodeId) {
-      console.log('[DIJKSTRA] Reached destination node');
       break;
     }
-    
-    console.log(`[DIJKSTRA] Iteration ${iterations}: Visiting node ${currentNode} (distance: ${smallestDistance.toFixed(2)})`);
     
     // Remove current node from unvisited
     unvisited.delete(currentNode);
     
     // Check neighbors
     const neighbors = adjacencyList.get(currentNode) || [];
-    console.log(`[DIJKSTRA] Node ${currentNode} has ${neighbors.length} neighbors`);
     
     for (const neighbor of neighbors) {
       if (unvisited.has(neighbor.nodeId)) {
-        const currentDistance = distances.get(currentNode) || Infinity;
+        const currentDistance = distances.get(currentNode) ?? Infinity;
         const newDistance = currentDistance + neighbor.weight;
-        const existingDistance = distances.get(neighbor.nodeId) || Infinity;
+        const existingDistance = distances.get(neighbor.nodeId) ?? Infinity;
         
         if (newDistance < existingDistance) {
           distances.set(neighbor.nodeId, newDistance);
           previous.set(neighbor.nodeId, currentNode);
-          console.log(`[DIJKSTRA] Updated distance to ${neighbor.nodeId}: ${newDistance.toFixed(2)}`);
         }
       }
     }
   }
-  
-  console.log(`[DIJKSTRA] Algorithm completed after ${iterations} iterations`);
   
   // Reconstruct path from end to start
   const path: string[] = [];
@@ -154,18 +140,12 @@ export function dijkstra(
     currentNode = previous.get(currentNode) || null;
   }
   
-  console.log('[DIJKSTRA] Reconstructed path:', path);
-  
   // Check if path starts from start node
   if (path[0] !== startNodeId || path.length === 0) {
-    console.error('[DIJKSTRA] No path exists - path does not start from start node');
-    console.error('[DIJKSTRA] Path start:', path[0]);
-    console.error('[DIJKSTRA] Expected start:', startNodeId);
     return null; // No path exists
   }
   
   const totalDistance = distances.get(endNodeId) || 0;
-  console.log('[DIJKSTRA] Path found! Total distance:', totalDistance.toFixed(2));
   
   return {
     path,

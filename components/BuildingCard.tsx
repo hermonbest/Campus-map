@@ -10,6 +10,7 @@ import {
   Dimensions,
   PanResponder,
   Image,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,7 +29,6 @@ interface Building {
   image_url: string | null;
   phone: string | null;
   email: string | null;
-  website: string | null;
   hours: string | null;
   color: string;
   icon_type: string;
@@ -125,7 +125,7 @@ export default function BuildingCard({ building, loading = false, onClose }: Bui
               <Image 
                 source={{ uri: building.image_url }} 
                 style={styles.buildingImage}
-                resizeMode="cover"
+                resizeMode="contain"
               />
             )}
             {/* Header */}
@@ -135,16 +135,38 @@ export default function BuildingCard({ building, loading = false, onClose }: Bui
               </View>
               <View style={styles.headerText}>
                 <Text style={styles.buildingName}>{building.name}</Text>
-                {building.description ? (
-                  <Text style={styles.description} numberOfLines={2}>
-                    {building.description}
-                  </Text>
-                ) : null}
               </View>
               <TouchableOpacity style={styles.closeButton} onPress={onClose}>
                 <Ionicons name="close" size={16} color="#71717A" />
               </TouchableOpacity>
             </View>
+
+            {/* Details - Description, Hours, Phone, Email */}
+            {(building.description || building.hours || building.phone || building.email) && (
+              <View style={styles.detailsSection}>
+                {building.description && (
+                  <Text style={styles.descriptionInDetails}>{building.description}</Text>
+                )}
+                {building.hours && (
+                  <View style={styles.detailRow}>
+                    <Ionicons name="time-outline" size={16} color="#71717A" />
+                    <Text style={styles.detailText}>{building.hours}</Text>
+                  </View>
+                )}
+                {building.phone && (
+                  <TouchableOpacity style={styles.detailRow} onPress={() => Linking.openURL(`tel:${building.phone}`)}>
+                    <Ionicons name="call-outline" size={16} color="#3B82F6" />
+                    <Text style={[styles.detailText, styles.detailLink]}>{building.phone}</Text>
+                  </TouchableOpacity>
+                )}
+                {building.email && (
+                  <TouchableOpacity style={styles.detailRow} onPress={() => Linking.openURL(`mailto:${building.email}`)}>
+                    <Ionicons name="mail-outline" size={16} color="#3B82F6" />
+                    <Text style={[styles.detailText, styles.detailLink]}>{building.email}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
             {/* Offices */}
             <View style={styles.officeSection}>
@@ -219,9 +241,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#3F3F46',
   },
   loadingWrap: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 10,
   },
   loadingText: {
@@ -230,7 +250,7 @@ const styles = StyleSheet.create({
   },
   buildingImage: {
     width: '100%',
-    height: 120,
+    height: 200,
     backgroundColor: '#27272A',
   },
   header: {
@@ -337,5 +357,28 @@ const styles = StyleSheet.create({
     color: '#52525B',
     fontSize: 14,
     textAlign: 'center',
+  },
+  detailsSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  descriptionInDetails: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  detailText: {
+    color: '#A1A1AA',
+    fontSize: 13,
+  },
+  detailLink: {
+    color: '#3B82F6',
   },
 });

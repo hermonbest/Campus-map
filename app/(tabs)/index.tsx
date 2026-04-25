@@ -17,7 +17,6 @@ interface Building {
   image_url: string | null;
   phone: string | null;
   email: string | null;
-  website: string | null;
   hours: string | null;
   x_pos: number;
   y_pos: number;

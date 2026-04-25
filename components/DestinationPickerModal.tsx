@@ -31,7 +31,6 @@ interface Building {
   image_url?: string | null;
   phone?: string | null;
   email?: string | null;
-  website?: string | null;
   hours?: string | null;
   color: string;
   icon_type: string;

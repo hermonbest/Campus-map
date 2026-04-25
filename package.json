@@ -17,6 +17,7 @@
     "@expo/vector-icons": "^15.0.3",
     "@likashefqet/react-native-image-zoom": "^4.3.0",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native/dev-middleware": "^0.85.2",
     "@react-navigation/native": "^7.1.8",
     "@supabase/supabase-js": "^2.100.1",
     "expo": "~54.0.33",

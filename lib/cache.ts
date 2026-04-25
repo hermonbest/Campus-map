@@ -7,6 +7,7 @@ const CACHE_KEYS = {
   OFFICES: '@campus_offices',
   NODES: '@campus_nodes',
   EDGES: '@campus_edges',
+  NOTICES: '@campus_notices',
   APP_VERSION: '@campus_app_version',
   LAST_SYNC: '@campus_last_sync',
 };
@@ -16,6 +17,7 @@ export interface CachedData {
   offices: any[];
   nodes: any[];
   edges: any[];
+  notices: any[];
   appVersion: number;
   lastSync: string;
 }
@@ -55,11 +57,12 @@ export async function cacheAllData(): Promise<CachedData> {
     console.log('Fetching all data from Supabase...');
     
     // Fetch all data in parallel
-    const [buildingsResult, officesResult, nodesResult, edgesResult, versionResult] = await Promise.all([
+    const [buildingsResult, officesResult, nodesResult, edgesResult, noticesResult, versionResult] = await Promise.all([
       supabase.from('buildings').select('*'),
       supabase.from('offices').select('*'),
       supabase.from('nav_nodes').select('*'),
       supabase.from('nav_edges').select('*'),
+      supabase.from('notices').select('*').eq('is_active', true).or('end_date.is.null,end_date.gte.' + new Date().toISOString()),
       supabase.from('app_version').select('*').single(),
     ]);
 
@@ -67,6 +70,7 @@ export async function cacheAllData(): Promise<CachedData> {
     if (officesResult.error) throw officesResult.error;
     if (nodesResult.error) throw nodesResult.error;
     if (edgesResult.error) throw edgesResult.error;
+    if (noticesResult.error) throw noticesResult.error;
     if (versionResult.error) throw versionResult.error;
 
     const data: CachedData = {
@@ -74,6 +78,7 @@ export async function cacheAllData(): Promise<CachedData> {
       offices: officesResult.data || [],
       nodes: nodesResult.data || [],
       edges: edgesResult.data || [],
+      notices: noticesResult.data || [],
       appVersion: versionResult.data?.version || 1,
       lastSync: new Date().toISOString(),
     };
@@ -83,6 +88,7 @@ export async function cacheAllData(): Promise<CachedData> {
     await AsyncStorage.setItem(CACHE_KEYS.OFFICES, JSON.stringify(data.offices));
     await AsyncStorage.setItem(CACHE_KEYS.NODES, JSON.stringify(data.nodes));
     await AsyncStorage.setItem(CACHE_KEYS.EDGES, JSON.stringify(data.edges));
+    await AsyncStorage.setItem(CACHE_KEYS.NOTICES, JSON.stringify(data.notices));
     await AsyncStorage.setItem(CACHE_KEYS.APP_VERSION, String(data.appVersion));
     await AsyncStorage.setItem(CACHE_KEYS.LAST_SYNC, data.lastSync);
 
@@ -99,16 +105,17 @@ export async function cacheAllData(): Promise<CachedData> {
  */
 export async function getCachedData(): Promise<CachedData | null> {
   try {
-    const [buildingsStr, officesStr, nodesStr, edgesStr, versionStr, lastSyncStr] = await Promise.all([
+    const [buildingsStr, officesStr, nodesStr, edgesStr, noticesStr, versionStr, lastSyncStr] = await Promise.all([
       AsyncStorage.getItem(CACHE_KEYS.BUILDINGS),
       AsyncStorage.getItem(CACHE_KEYS.OFFICES),
       AsyncStorage.getItem(CACHE_KEYS.NODES),
       AsyncStorage.getItem(CACHE_KEYS.EDGES),
+      AsyncStorage.getItem(CACHE_KEYS.NOTICES),
       AsyncStorage.getItem(CACHE_KEYS.APP_VERSION),
       AsyncStorage.getItem(CACHE_KEYS.LAST_SYNC),
     ]);
 
-    if (!buildingsStr || !officesStr || !nodesStr || !edgesStr || !versionStr || !lastSyncStr) {
+    if (!buildingsStr || !officesStr || !nodesStr || !edgesStr || !noticesStr || !versionStr || !lastSyncStr) {
       return null;
     }
 
@@ -117,6 +124,7 @@ export async function getCachedData(): Promise<CachedData | null> {
       offices: JSON.parse(officesStr),
       nodes: JSON.parse(nodesStr),
       edges: JSON.parse(edgesStr),
+      notices: JSON.parse(noticesStr),
       appVersion: parseInt(versionStr, 10),
       lastSync: lastSyncStr,
     };
@@ -172,6 +180,7 @@ export async function clearCache(): Promise<void> {
       CACHE_KEYS.OFFICES,
       CACHE_KEYS.NODES,
       CACHE_KEYS.EDGES,
+      CACHE_KEYS.NOTICES,
       CACHE_KEYS.APP_VERSION,
       CACHE_KEYS.LAST_SYNC,
     ]);

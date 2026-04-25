@@ -24,7 +24,6 @@ interface Building {
   image_url: string | null;
   phone: string | null;
   email: string | null;
-  website: string | null;
   hours: string | null;
   offices?: Office[];
 }
@@ -92,12 +91,20 @@ export default function BuildingDetails() {
           <Text style={styles.backButtonText}>← Back to Map</Text>
         </TouchableOpacity>
 
-        {building.image_url && (
+        {building.image_url ? (
           <Image 
             source={{ uri: building.image_url }} 
-            style={styles.buildingImage}
-            resizeMode="cover"
+            style={{
+              width: '100%',
+              aspectRatio: 1, // Hardcoded height
+              backgroundColor: 'red',
+            }}
+            resizeMode="contain"
           />
+        ) : (
+          <View style={styles.buildingImage}>
+            <Text style={{ color: '#666', textAlign: 'center', marginTop: 150 }}>No image available</Text>
+          </View>
         )}
 
         <View style={styles.header}>
@@ -105,9 +112,10 @@ export default function BuildingDetails() {
             <Ionicons name="business" size={32} color="#FFFFFF" />
           </View>
           <Text style={styles.buildingName}>{building.name}</Text>
+          <Text style={{ fontSize: 50, color: 'red' }}>TESTING UPDATE</Text>
         </View>
 
-        {(building.hours || building.phone || building.email || building.website) && (
+        {(building.hours || building.phone || building.email) && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Details</Text>
             <View style={styles.detailsGrid}>
@@ -141,18 +149,6 @@ export default function BuildingDetails() {
                   <View style={styles.detailTextContent}>
                     <Text style={styles.detailLabel}>Email</Text>
                     <Text style={[styles.detailValue, { color: '#3B82F6' }]}>{building.email}</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-              {building.website && (
-                <TouchableOpacity 
-                  style={styles.detailItem}
-                  onPress={() => Linking.openURL(building.website!)}
-                >
-                  <Ionicons name="globe-outline" size={20} color="#3B82F6" />
-                  <View style={styles.detailTextContent}>
-                    <Text style={styles.detailLabel}>Website</Text>
-                    <Text style={[styles.detailValue, { color: '#3B82F6' }]}>Visit Website</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -213,9 +209,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   buildingImage: {
-    width: '100%',
-    height: 250,
-    backgroundColor: '#E4E4E7',
+    width: '100%',           // Take up full width
+    aspectRatio: 16 / 9,     // Or a specific height like 300
+    backgroundColor: '#f0f0f0',
+  // remove alignSelf if width is 100%
   },
   header: {
     paddingHorizontal: 24,

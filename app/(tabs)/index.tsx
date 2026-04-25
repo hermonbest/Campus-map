@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MapViewer } from '../../components/MapViewer';
+import { SearchModal } from '../../components/SearchModal';
 import { getCachedMapImage, getMapUrl, cacheMapImage, getCachedItem, cacheData, checkVersion, clearCache, getCachedData, cacheAllData } from '../../lib/cache';
 import { supabase } from '../../lib/supabase';
 
@@ -49,6 +50,8 @@ export default function Index() {
   const [path, setPath] = useState<string[] | null>(null);
   const [destinationBuildingId, setDestinationBuildingId] = useState<string | null>(null);
   const [noPathMessage, setNoPathMessage] = useState<string | null>(null);
+  const [searchModalVisible, setSearchModalVisible] = useState(false);
+  const [buildingsWithOffices, setBuildingsWithOffices] = useState<Building[]>([]);
 
   useEffect(() => {
     loadData();
@@ -107,6 +110,24 @@ export default function Index() {
         if (data) {
           setBuildings(data);
           await cacheData('buildings', data);
+        }
+      }
+
+      // Load buildings with offices for search
+      const cachedBuildingsWithOffices = await getCachedItem('buildings_with_offices');
+      
+      if (cachedBuildingsWithOffices) {
+        setBuildingsWithOffices(cachedBuildingsWithOffices);
+      } else {
+        const { data, error } = await supabase
+          .from('buildings')
+          .select('*, offices(*)')
+          .eq('is_active', true);
+        
+        if (error) throw error;
+        if (data) {
+          setBuildingsWithOffices(data);
+          await cacheData('buildings_with_offices', data);
         }
       }
 
@@ -190,6 +211,16 @@ export default function Index() {
     router.setParams({});
   };
 
+  const handleSearchResultSelect = (building: Building, office?: any) => {
+    if (office) {
+      // If an office was selected, navigate to building details
+      router.push(`/building-details?buildingId=${building.id}`);
+    } else {
+      // If a building was selected, navigate to building details
+      router.push(`/building-details?buildingId=${building.id}`);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -223,6 +254,12 @@ export default function Index() {
           <Text style={styles.updateAvailable}>Update available (v{versionInfo.serverVersion})</Text>
         )}
         <View style={styles.buttonRow}>
+          <TouchableOpacity 
+            style={styles.searchButton} 
+            onPress={() => setSearchModalVisible(true)}
+          >
+            <Text style={styles.refreshButtonText}>🔍 Search</Text>
+          </TouchableOpacity>
           {(path || destinationBuildingId) && (
             <TouchableOpacity 
               style={[styles.refreshButton, styles.clearRouteButton]} 
@@ -248,6 +285,12 @@ export default function Index() {
           </TouchableOpacity>
         </View>
       </View>
+      <SearchModal
+        visible={searchModalVisible}
+        onClose={() => setSearchModalVisible(false)}
+        buildings={buildingsWithOffices}
+        onSelect={handleSearchResultSelect}
+      />
     </View>
   );
 }
@@ -285,6 +328,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 8,
+  },
+  searchButton: {
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flex: 1,
   },
   refreshButton: {
     backgroundColor: '#3B82F6',

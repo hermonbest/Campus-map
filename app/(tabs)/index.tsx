@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MapViewer } from '../../components/MapViewer';
-import { getCachedMapImage, getMapUrl, cacheMapImage, getCachedItem, cacheData, checkVersion, clearCache } from '../../lib/cache';
+import { getCachedMapImage, getMapUrl, cacheMapImage, getCachedItem, cacheData, checkVersion, clearCache, getCachedData, cacheAllData } from '../../lib/cache';
 import { supabase } from '../../lib/supabase';
 
 interface Building {
@@ -21,18 +21,57 @@ interface Building {
   }>;
 }
 
+interface Node {
+  id: string;
+  x_pos: number;
+  y_pos: number;
+  is_building_entrance: boolean;
+  building_id: string | null;
+}
+
+interface Edge {
+  id: string;
+  node_a: string;
+  node_b: string;
+  weight: number;
+}
+
 export default function Index() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [mapUrl, setMapUrl] = useState<string | null>(null);
   const [buildings, setBuildings] = useState<Building[]>([]);
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [edges, setEdges] = useState<Edge[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [versionInfo, setVersionInfo] = useState<{ serverVersion: number; cachedVersion: number } | null>(null);
+  const [path, setPath] = useState<string[] | null>(null);
+  const [destinationBuildingId, setDestinationBuildingId] = useState<string | null>(null);
+  const [noPathMessage, setNoPathMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
     checkForUpdates();
   }, []);
+
+  // Handle path parameters from route screen
+  useEffect(() => {
+    if (params.showPath === 'true' && params.pathNodes) {
+      try {
+        const pathNodes = JSON.parse(params.pathNodes as string);
+        setPath(pathNodes);
+      } catch (error) {
+        console.error('Error parsing path nodes:', error);
+      }
+    }
+    if (params.destinationBuildingId) {
+      setDestinationBuildingId(params.destinationBuildingId as string);
+    }
+    if (params.noPathMessage) {
+      setNoPathMessage(params.noPathMessage as string);
+    }
+  }, [params]);
 
   const loadData = async () => {
     try {
@@ -62,6 +101,40 @@ export default function Index() {
         if (data) {
           setBuildings(data);
           await cacheData('buildings', data);
+        }
+      }
+
+      // Load nodes
+      const cachedNodes = await getCachedItem('nodes');
+      
+      if (cachedNodes) {
+        setNodes(cachedNodes);
+      } else {
+        const { data, error } = await supabase
+          .from('nav_nodes')
+          .select('*');
+        
+        if (error) throw error;
+        if (data) {
+          setNodes(data);
+          await cacheData('nodes', data);
+        }
+      }
+
+      // Load edges
+      const cachedEdges = await getCachedItem('edges');
+      
+      if (cachedEdges) {
+        setEdges(cachedEdges);
+      } else {
+        const { data, error } = await supabase
+          .from('nav_edges')
+          .select('*');
+        
+        if (error) throw error;
+        if (data) {
+          setEdges(data);
+          await cacheData('edges', data);
         }
       }
 
@@ -104,6 +177,13 @@ export default function Index() {
     }
   };
 
+  const handleClearRoute = () => {
+    setPath(null);
+    setDestinationBuildingId(null);
+    setNoPathMessage(null);
+    router.setParams({});
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -123,20 +203,44 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <MapViewer mapUrl={mapUrl} buildings={buildings} onBuildingPress={handleBuildingPress} />
+      <MapViewer 
+        mapUrl={mapUrl} 
+        buildings={buildings} 
+        onBuildingPress={handleBuildingPress}
+        path={path || undefined}
+        nodes={nodes}
+        destinationBuildingId={destinationBuildingId || undefined}
+        noPathMessage={noPathMessage || undefined}
+      />
       <View style={styles.refreshBar}>
         {versionInfo && versionInfo.serverVersion > versionInfo.cachedVersion && (
           <Text style={styles.updateAvailable}>Update available (v{versionInfo.serverVersion})</Text>
         )}
-        <TouchableOpacity 
-          style={styles.refreshButton} 
-          onPress={handleRefresh}
-          disabled={refreshing}
-        >
-          <Text style={styles.refreshButtonText}>
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          {(path || destinationBuildingId) && (
+            <TouchableOpacity 
+              style={[styles.refreshButton, styles.clearRouteButton]} 
+              onPress={handleClearRoute}
+            >
+              <Text style={styles.refreshButtonText}>Clear Route</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity 
+            style={styles.routeButton} 
+            onPress={() => router.push('/route' as any)}
+          >
+            <Text style={styles.refreshButtonText}>Navigate</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.refreshButton} 
+            onPress={handleRefresh}
+            disabled={refreshing}
+          >
+            <Text style={styles.refreshButtonText}>
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -163,24 +267,40 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     padding: 16,
+  },
+  buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
   updateAvailable: {
     color: '#10B981',
     fontSize: 14,
     fontWeight: '600',
+    marginBottom: 8,
   },
   refreshButton: {
     backgroundColor: '#3B82F6',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
+    flex: 1,
+  },
+  clearRouteButton: {
+    backgroundColor: '#EF4444',
+  },
+  routeButton: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flex: 1,
   },
   refreshButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+    textAlign: 'center',
   },
 });

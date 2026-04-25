@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Image, StyleSheet, useWindowDimensions, StatusBar, Platform, ScrollView, TouchableOpacity, Text } from 'react-native';
+import Svg, { Polyline } from 'react-native-svg';
 
 interface Building {
   id: string;
@@ -21,9 +22,13 @@ interface MapViewerProps {
   mapUrl: string;
   buildings?: Building[];
   onBuildingPress?: (building: Building) => void;
+  path?: string[]; // Array of node IDs for the path
+  nodes?: Array<{ id: string; x_pos: number; y_pos: number }>; // All nodes for coordinate lookup
+  destinationBuildingId?: string; // Building ID to highlight when no path exists
+  noPathMessage?: string; // Message to display when no path exists
 }
 
-export function MapViewer({ mapUrl, buildings = [], onBuildingPress }: MapViewerProps) {
+export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes = [], destinationBuildingId, noPathMessage }: MapViewerProps) {
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const scrollViewRef = useRef<ScrollView>(null);
   
@@ -40,6 +45,23 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress }: MapViewer
     const middlePosition = (imageWidth - SCREEN_WIDTH) / 2;
     scrollViewRef.current?.scrollTo({ x: middlePosition, y: 0, animated: false });
   }, [imageWidth, SCREEN_WIDTH]);
+
+  // Calculate path coordinates from node IDs
+  const pathCoordinates = path && nodes.length > 0 
+    ? path.map(nodeId => {
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) return null;
+        return {
+          x: Number(node.x_pos) * imageWidth,
+          y: Number(node.y_pos) * imageHeight,
+        };
+      }).filter(Boolean) as Array<{ x: number; y: number }>
+    : [];
+
+  // Convert coordinates to polyline points string
+  const polylinePoints = pathCoordinates.length > 0
+    ? pathCoordinates.map(coord => `${coord.x},${coord.y}`).join(' ')
+    : '';
 
   return (
     <View style={styles.container}>
@@ -59,6 +81,25 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress }: MapViewer
             }}
             resizeMode="cover"
           />
+          
+          {/* Render path using SVG */}
+          {pathCoordinates.length > 1 && (
+            <Svg 
+              style={StyleSheet.absoluteFill} 
+              width={imageWidth} 
+              height={imageHeight}
+            >
+              <Polyline
+                points={polylinePoints}
+                stroke="#10B981"
+                strokeWidth="4"
+                strokeDasharray="10, 5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          )}
+          
           {buildings.map((building) => (
             <TouchableOpacity
               key={building.id}
@@ -69,12 +110,20 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress }: MapViewer
                   top: building.y_pos * imageHeight - 15,
                   backgroundColor: building.color,
                 },
+                destinationBuildingId === building.id && styles.destinationMarker,
               ]}
               onPress={() => onBuildingPress?.(building)}
             >
               <Text style={styles.buildingMarkerText}>B</Text>
             </TouchableOpacity>
           ))}
+
+          {/* No-path message overlay */}
+          {noPathMessage && destinationBuildingId && (
+            <View style={styles.noPathOverlay}>
+              <Text style={styles.noPathText}>{noPathMessage}</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -107,9 +156,34 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+  destinationMarker: {
+    borderWidth: 4,
+    borderColor: '#EF4444',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 10,
+  },
   buildingMarkerText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  noPathOverlay: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#EF4444',
+  },
+  noPathText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
   },
 });

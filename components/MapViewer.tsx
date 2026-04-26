@@ -32,7 +32,7 @@ interface Office {
 }
 
 interface MapViewerProps {
-  mapUrl: string;
+  mapUrl: string | null;
   buildings?: Building[];
   onBuildingPress?: (building: Building) => void | Promise<void>;
   path?: string[]; // Array of node IDs for the path

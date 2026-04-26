@@ -60,7 +60,6 @@ export default function Index() {
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [versionInfo, setVersionInfo] = useState<{ serverVersion: number; cachedVersion: number } | null>(null);
   const [path, setPath] = useState<string[] | null>(null);
@@ -70,9 +69,10 @@ export default function Index() {
   const [buildingsWithOffices, setBuildingsWithOffices] = useState<Building[]>([]);
   const [centerOnBuilding, setCenterOnBuilding] = useState<Building | null>(null);
   const [offices, setOffices] = useState<Office[]>([]);
-  const [destinationPickerVisible, setDestinationPickerVisible] = useState(false);
+  const [destinationPickerVisible, setDestinationPickerVisible] = useState(true);
   const [activeRoute, setActiveRoute] = useState<RouteResult | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
+  const [cardExpanded, setCardExpanded] = useState(false);
   const [cardLoading, setCardLoading] = useState(false);
   const [userStartNodeId, setUserStartNodeId] = useState<string | null>(null);
 
@@ -118,8 +118,6 @@ export default function Index() {
 
   const loadData = async (forceRefresh = false) => {
     try {
-      setLoading(true);
-      
       // Load map URL first (usually static)
       let currentMapUrl = await getCachedMapImage();
       if (!currentMapUrl || forceRefresh) {
@@ -161,8 +159,7 @@ export default function Index() {
         // Sync buildings with offices
         const { data: withOffices, error } = await supabase
           .from('buildings')
-          .select('*, offices(*)')
-          .eq('is_active', true);
+          .select('*, offices(*)');
 
         if (!error && withOffices) {
           setBuildingsWithOffices(withOffices);
@@ -180,10 +177,8 @@ export default function Index() {
 
       // Show the destination picker once data is ready (only if no active route)
       setDestinationPickerVisible(true);
-      setLoading(false);
     } catch (error) {
       console.error('Error loading campus data:', error);
-      setLoading(false);
     }
   };
 
@@ -333,30 +328,14 @@ export default function Index() {
     // 1. Center map on the selected building
     setCenterOnBuilding(building);
     setSearchModalVisible(false);
-    
-    // 2. Open the building details card
+
+    // 2. Open the building details card in expanded mode
+    setCardExpanded(true);
     handleBuildingPress(building);
-    
+
     // 3. Clear centering after animation
     setTimeout(() => setCenterOnBuilding(null), 2000);
   };
-
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text style={styles.loadingText}>Loading map...</Text>
-      </View>
-    );
-  }
-
-  if (!mapUrl) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Failed to load map</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
@@ -450,7 +429,11 @@ export default function Index() {
       <BuildingCard
         building={selectedBuilding}
         loading={cardLoading}
-        onClose={() => setSelectedBuilding(null)}
+        expanded={cardExpanded}
+        onClose={() => {
+          setSelectedBuilding(null);
+          setCardExpanded(false);
+        }}
         onRouteToBuilding={handleRouteToBuilding}
       />
     </View>
@@ -461,11 +444,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-  },
-  loadingText: {
-    marginTop: 16,
-    color: '#fff',
-    fontSize: 16,
   },
   errorText: {
     color: '#fff',

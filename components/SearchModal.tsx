@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -122,6 +123,7 @@ export function SearchModal({ visible, onClose, buildings, onSelect }: SearchMod
     onClose();
     setSearchQuery('');
     setResults([]);
+    Keyboard.dismiss();
   };
 
   const handleClose = () => {
@@ -164,7 +166,7 @@ export function SearchModal({ visible, onClose, buildings, onSelect }: SearchMod
               />
             </View>
 
-            <ScrollView style={styles.resultsContainer}>
+            <ScrollView style={styles.resultsContainer} keyboardShouldPersistTaps="handled">
               {loading ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="small" color="#3B82F6" />

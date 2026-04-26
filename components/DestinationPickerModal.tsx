@@ -180,9 +180,11 @@ export default function DestinationPickerModal({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle="fullScreen"
       onRequestClose={onDismiss}
+      statusBarTranslucent={true}
     >
+      <StatusBar barStyle="light-content" backgroundColor="#18181B" />
       <View style={[styles.container, { paddingTop: insets.top }]}>
         {/* Header */}
         <View style={styles.header}>
@@ -224,9 +226,9 @@ export default function DestinationPickerModal({
 
         {!startNodeId && (
           <View style={styles.emptyState}>
-            <Ionicons name="warning-outline" size={32} color="#71717A" />
+            <ActivityIndicator size="large" color="#3B82F6" />
             <Text style={styles.emptyText}>
-              No start location available. Please enable location services.
+              Detecting your location...
             </Text>
           </View>
         )}

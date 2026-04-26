@@ -4,7 +4,7 @@
     "slug": "kue-campus-map",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/kue_logo.png",
+    "icon": "./assets/Applogo.png",
     "scheme": "kuecampusmap",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -15,7 +15,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
-        "foregroundImage": "./assets/kue_logo.png",
+        "foregroundImage": "./assets/Applogo.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
@@ -34,14 +34,14 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/kue_logo.png"
+      "favicon": "./assets/Applogo.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/kue_logo.png",
+          "image": "./assets/Applogo.png",
           "imageWidth": 300,
           "resizeMode": "contain",
           "backgroundColor": "#F8FAFC",

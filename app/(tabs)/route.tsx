@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getCachedItem } from '../../lib/cache';
+import { getCachedData, cacheAllData } from '../../lib/cache';
 import { useFocusEffect } from '@react-navigation/native';
-import { supabase } from '../../lib/supabase';
 import { dijkstra } from '../../lib/dijkstra';
 
 interface Building {
@@ -73,22 +72,22 @@ export default function RouteScreen() {
 
   const loadData = async () => {
     try {
-      const cachedBuildings = await getCachedItem('buildings');
-      const cachedOffices = await getCachedItem('offices');
-      const cachedNodes = await getCachedItem('nodes');
-      const cachedEdges = await getCachedItem('edges');
+      const cached = await getCachedData();
 
-      if (cachedBuildings) setBuildings(cachedBuildings);
-      if (cachedOffices) setOffices(cachedOffices);
-      if (cachedNodes) setNodes(cachedNodes);
-      if (cachedEdges) setEdges(cachedEdges);
-
-      // If no cached offices, try to fetch from Supabase
-      if (!cachedOffices) {
-        const { data, error } = await supabase.from('offices').select('*');
-        if (!error && data) {
-          setOffices(data);
-        }
+      if (cached) {
+        setBuildings(cached.buildings);
+        setOffices(cached.offices);
+        setNodes(cached.nodes);
+        setEdges(cached.edges);
+        console.log('[ROUTE] Using cached data (v' + cached.appVersion + ')');
+      } else {
+        console.log('[ROUTE] No cached data found, performing initial sync...');
+        const freshData = await cacheAllData();
+        setBuildings(freshData.buildings);
+        setOffices(freshData.offices);
+        setNodes(freshData.nodes);
+        setEdges(freshData.edges);
+        console.log('[ROUTE] Data synced from server');
       }
 
       setLoading(false);

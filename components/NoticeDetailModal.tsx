@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getCachedNoticeImage } from '../lib/cache';
 
 interface Notice {
   id: string;
@@ -40,6 +41,26 @@ export default function NoticeDetailModal({
   onClose,
 }: NoticeDetailModalProps) {
   const insets = useSafeAreaInsets();
+  const [cachedImagePath, setCachedImagePath] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadImage() {
+      if (notice?.image_url) {
+        const cached = await getCachedNoticeImage(notice.id);
+        if (isMounted) {
+          setCachedImagePath(cached);
+        }
+      }
+    }
+
+    loadImage();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [notice?.id]);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -99,7 +120,7 @@ export default function NoticeDetailModal({
           {/* Image */}
           {notice.image_url && (
             <Image
-              source={{ uri: notice.image_url }}
+              source={{ uri: cachedImagePath || notice.image_url }}
               style={styles.noticeImage}
               resizeMode="cover"
             />

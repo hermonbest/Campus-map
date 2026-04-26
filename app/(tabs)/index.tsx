@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, TextInput } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, TextInput, ScrollView, FlatList } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MapViewer } from '../../components/MapViewer';
-import { SearchModal } from '../../components/SearchModal';
 import DestinationPickerModal, { RouteResult } from '../../components/DestinationPickerModal';
 import BuildingCard from '../../components/BuildingCard';
 import { getCachedMapImage, getMapUrl, cacheMapImage, getCachedItem, cacheData, checkVersion, clearCache, getCachedData, cacheAllData, cacheBuildingImages, cacheNoticeImages, cacheMapImageFile, getCachedMapImageFile, getCacheStatus } from '../../lib/cache';
@@ -66,7 +65,6 @@ export default function Index() {
   const [path, setPath] = useState<string[] | null>(null);
   const [destinationBuildingId, setDestinationBuildingId] = useState<string | null>(null);
   const [noPathMessage, setNoPathMessage] = useState<string | null>(null);
-  const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [buildingsWithOffices, setBuildingsWithOffices] = useState<Building[]>([]);
   const [centerOnBuilding, setCenterOnBuilding] = useState<Building | null>(null);
   const [offices, setOffices] = useState<Office[]>([]);
@@ -78,6 +76,8 @@ export default function Index() {
   const [userStartNodeId, setUserStartNodeId] = useState<string | null>(null);
   const [hasSeenDestinationPicker, setHasSeenDestinationPicker] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
 
   // Always start routes from the building named exactly "main enterance" (fallback if no user location)
   const mainEntranceBuilding = useMemo(
@@ -345,23 +345,81 @@ export default function Index() {
     }
   };
 
-  const handleSearchResultSelect = (building: Building, office?: Office) => {
-    // 1. Center map on the selected building
-    setCenterOnBuilding(building);
-    setSearchModalVisible(false);
+  const handleSearchResultSelect = (result: any) => {
+    setCenterOnBuilding(result.building);
     setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchDropdown(false);
 
-    // 2. Open the building details card in expanded mode
     setCardExpanded(true);
-    handleBuildingPress(building);
+    handleBuildingPress(result.building);
 
-    // 3. Clear centering after animation
     setTimeout(() => setCenterOnBuilding(null), 2000);
   };
 
   const handleSearchFocus = () => {
-    setSearchModalVisible(true);
+    setShowSearchDropdown(true);
   };
+
+  const handleSearchBlur = () => {
+    // Don't auto-hide on blur to allow tapping results
+  };
+
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setSearchResults([]);
+      setShowSearchDropdown(false);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const results: any[] = [];
+
+    buildingsWithOffices.forEach((building: Building) => {
+      if (building.name.toLowerCase().includes(query)) {
+        results.push({
+          type: 'building',
+          building,
+          displayText: building.name,
+          subText: building.description || 'Building',
+        });
+      }
+
+      if (building.offices && building.offices.length > 0) {
+        building.offices.forEach((office: Office) => {
+          const matchRoom = office.room_number.toLowerCase().includes(query);
+          const matchStaff = office.staff_name.toLowerCase().includes(query);
+
+          if (matchRoom || matchStaff) {
+            results.push({
+              type: 'office',
+              building,
+              office,
+              displayText: `${office.room_number} - ${office.staff_name}`,
+              subText: building.name,
+            });
+          }
+        });
+      }
+    });
+
+    results.sort((a, b) => {
+      const aExact = a.displayText.toLowerCase() === query;
+      const bExact = b.displayText.toLowerCase() === query;
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+
+      const aStarts = a.displayText.toLowerCase().startsWith(query);
+      const bStarts = b.displayText.toLowerCase().startsWith(query);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+
+      return a.displayText.localeCompare(b.displayText);
+    });
+
+    setSearchResults(results);
+    setShowSearchDropdown(true);
+  }, [searchQuery, buildingsWithOffices]);
 
   const handleSearchBarPress = () => {
     if (activeRoute) {
@@ -385,13 +443,22 @@ export default function Index() {
         isOnRoute={!!path}
       />
 
+      {/* Search backdrop - covers entire screen when dropdown is open */}
+      {showSearchDropdown && !activeRoute && (
+        <TouchableOpacity
+          style={styles.searchBackdrop}
+          activeOpacity={1}
+          onPress={() => {
+            setSearchQuery('');
+            setSearchResults([]);
+            setShowSearchDropdown(false);
+          }}
+        />
+      )}
+
       {/* Top bar: Full-width search input */}
       <View style={[styles.floatingControls, { top: insets.top + 10 }]}>
-        <TouchableOpacity
-          style={styles.searchBarContainer}
-          onPress={handleSearchBarPress}
-          activeOpacity={0.8}
-        >
+        <View style={styles.searchBarContainer}>
           <Ionicons name="search" size={18} color="#A1A1AA" style={{ marginRight: 10 }} />
           {activeRoute ? (
             <View style={styles.searchBarContent}>
@@ -412,11 +479,54 @@ export default function Index() {
               value={searchQuery}
               onChangeText={setSearchQuery}
               onFocus={handleSearchFocus}
+              onBlur={handleSearchBlur}
               autoCapitalize="none"
               autoCorrect={false}
             />
           )}
-        </TouchableOpacity>
+        </View>
+
+        {/* Search results dropdown */}
+        {showSearchDropdown && !activeRoute && searchResults.length > 0 && (
+          <View style={styles.searchDropdown}>
+            <FlatList
+              data={searchResults}
+              keyExtractor={(item, index) => `${item.type}-${item.building.id}-${item.office?.id || index}`}
+              style={styles.dropdownList}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={() => handleSearchResultSelect(item)}
+                >
+                  <View style={styles.resultIconContainer}>
+                    <View
+                      style={[
+                        styles.resultIcon,
+                        { backgroundColor: item.building.color },
+                      ]}
+                    >
+                      <Ionicons
+                        name={item.type === 'building' ? 'business' : 'briefcase'}
+                        size={20}
+                        color="#FFFFFF"
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.resultTextContainer}>
+                    <Text style={styles.resultDisplayText}>{item.displayText}</Text>
+                    <Text style={styles.resultSubText}>{item.subText}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>No results found</Text>
+                </View>
+              }
+            />
+          </View>
+        )}
       </View>
 
       {/* Refresh button */}
@@ -462,14 +572,6 @@ export default function Index() {
             console.error('Error saving first launch flag:', error);
           }
         }}
-      />
-
-      <SearchModal
-        visible={searchModalVisible}
-        onClose={() => setSearchModalVisible(false)}
-        buildings={buildingsWithOffices}
-        onSelect={handleSearchResultSelect}
-        initialQuery={searchQuery}
       />
 
       {/* Building details bottom-sheet card */}
@@ -572,5 +674,74 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 10,
+  },
+  searchDropdown: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 60,
+    backgroundColor: 'rgba(24, 24, 27, 0.95)',
+    borderRadius: 16,
+    maxHeight: 300,
+    zIndex: 1000,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  searchBackdrop: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+    zIndex: 50,
+  },
+  dropdownList: {
+    maxHeight: 300,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  resultIconContainer: {
+    marginRight: 12,
+  },
+  resultIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resultTextContainer: {
+    flex: 1,
+  },
+  resultDisplayText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FAFAFA',
+    letterSpacing: -0.2,
+  },
+  resultSubText: {
+    fontSize: 12,
+    color: '#A1A1AA',
+    marginTop: 2,
+  },
+  emptyContainer: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#71717A',
   },
 });

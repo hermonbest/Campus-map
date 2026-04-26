@@ -84,6 +84,9 @@ export function useUserLocation(enabled: boolean = true, nodes?: Array<{ id: str
   const [error, setError] = useState<LocationError | null>(null);
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
+  const previousPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const smoothingFactor = 0.3; // Lower = more smoothing (0.1-0.5 recommended)
+  const maxJumpDistance = 0.05; // Maximum allowed jump in map coordinates (0-1)
 
   useEffect(() => {
     if (!enabled) {
@@ -125,6 +128,29 @@ export function useUserLocation(enabled: boolean = true, nodes?: Array<{ id: str
         displayX = closestNode ? Number(closestNode.x_pos) : mapPosition.x;
         displayY = closestNode ? Number(closestNode.y_pos) : mapPosition.y;
       }
+
+      // Apply smoothing to prevent jumps
+      const previousPos = previousPositionRef.current;
+      if (previousPos && isOnRoute) {
+        // Calculate distance from previous position
+        const dx = displayX - previousPos.x;
+        const dy = displayY - previousPos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // If jump is too large, clamp it
+        if (distance > maxJumpDistance) {
+          const ratio = maxJumpDistance / distance;
+          displayX = previousPos.x + dx * ratio;
+          displayY = previousPos.y + dy * ratio;
+        }
+        
+        // Apply smoothing (interpolate between previous and new position)
+        displayX = previousPos.x + (displayX - previousPos.x) * smoothingFactor;
+        displayY = previousPos.y + (displayY - previousPos.y) * smoothingFactor;
+      }
+      
+      // Update previous position
+      previousPositionRef.current = { x: displayX, y: displayY };
 
       setLocation({
         x: displayX,

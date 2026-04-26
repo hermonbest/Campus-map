@@ -21,7 +21,7 @@ async function testConnection() {
     // Test 1: Check Supabase client initialization
     console.log('1. Testing Supabase client initialization...');
     console.log('✅ Supabase URL:', supabaseUrl);
-    console.log('✅ Anon key length:', supabaseAnonKey.length, '\n');
+    console.log('✅ Anon key length:', supabaseAnonKey!.length, '\n');
 
     // Test 2: Query app_version table
     console.log('2. Querying app_version table...');

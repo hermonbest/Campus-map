@@ -5,12 +5,12 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl) {
-  logger.error('SUPABASE_INIT', 'EXPO_PUBLIC_SUPABASE_URL is required');
+  logger.error('SUPABASE_INIT', 'EXPO_PUBLIC_SUPABASE_URL is required', new Error('Missing EXPO_PUBLIC_SUPABASE_URL'));
   throw new Error('EXPO_PUBLIC_SUPABASE_URL is required');
 }
 
 if (!supabaseAnonKey) {
-  logger.error('SUPABASE_INIT', 'EXPO_PUBLIC_SUPABASE_ANON_KEY is required');
+  logger.error('SUPABASE_INIT', 'EXPO_PUBLIC_SUPABASE_ANON_KEY is required', new Error('Missing EXPO_PUBLIC_SUPABASE_ANON_KEY'));
   throw new Error('EXPO_PUBLIC_SUPABASE_ANON_KEY is required');
 }
 

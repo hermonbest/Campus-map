@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, TextInput, ScrollView, FlatList } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, TextInput, ScrollView, FlatList, Keyboard } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -346,15 +346,13 @@ export default function Index() {
   };
 
   const handleSearchResultSelect = (result: any) => {
+    Keyboard.dismiss();
     setCenterOnBuilding(result.building);
     setSearchQuery('');
     setSearchResults([]);
     setShowSearchDropdown(false);
 
-    setCardExpanded(true);
-    handleBuildingPress(result.building);
-
-    setTimeout(() => setCenterOnBuilding(null), 2000);
+    setTimeout(() => setCenterOnBuilding(null), 10000);
   };
 
   const handleSearchFocus = () => {

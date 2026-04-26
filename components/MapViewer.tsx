@@ -89,14 +89,18 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
       const scrollX = targetX - SCREEN_WIDTH / 2;
       scrollViewRef.current?.scrollTo({ x: scrollX, y: 0, animated: true });
 
-      // Trigger pulsing animation
-      pulsingScale.value = withSequence(
-        withTiming(1.5, { duration: 300, easing: Easing.out(Easing.ease) }),
-        withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1.3, { duration: 200, easing: Easing.out(Easing.ease) }),
-        withTiming(1, { duration: 200, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1.2, { duration: 150, easing: Easing.out(Easing.ease) }),
-        withTiming(1, { duration: 150, easing: Easing.inOut(Easing.ease) })
+      // Trigger continuous pulsing animation
+      pulsingScale.value = withRepeat(
+        withSequence(
+          withTiming(1.5, { duration: 300, easing: Easing.out(Easing.ease) }),
+          withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1.3, { duration: 200, easing: Easing.out(Easing.ease) }),
+          withTiming(1, { duration: 200, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1.2, { duration: 150, easing: Easing.out(Easing.ease) }),
+          withTiming(1, { duration: 150, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        false
       );
     }
   }, [centerOnBuilding, imageWidth, SCREEN_WIDTH]);
@@ -182,14 +186,16 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
         showsHorizontalScrollIndicator={false}
       >
         <View style={{ width: imageWidth, height: imageHeight, position: 'relative' }}>
-          <Image
-            source={{ uri: mapUrl }}
-            style={{
-              width: imageWidth,
-              height: imageHeight,
-            }}
-            resizeMode="cover"
-          />
+          {mapUrl && (
+            <Image
+              source={{ uri: mapUrl }}
+              style={{
+                width: imageWidth,
+                height: imageHeight,
+              }}
+              resizeMode="cover"
+            />
+          )}
 
           {/* Render path using SVG */}
           {pathCoordinates.length > 1 && (
@@ -246,27 +252,43 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
           {buildings.map((building) => {
             const isSelected = centerOnBuilding?.id === building.id;
             return (
-              <Animated.View
-                key={building.id}
-                style={[
-                  styles.buildingMarker,
-                  {
-                    left: building.x_pos * imageWidth - 12,
-                    top: building.y_pos * imageHeight - 12,
-                    backgroundColor: building.color,
-                    transform: [{ scale: isSelected ? pulsingScale : 1 }],
-                  },
-                  destinationBuildingId === building.id && styles.destinationMarker,
-                  isSelected && styles.pulsingMarker,
-                ]}
-              >
-                <TouchableOpacity
-                  onPress={() => onBuildingPress?.(building)}
-                  style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
+              <React.Fragment key={building.id}>
+                {/* Building name label */}
+                <View
+                  style={[
+                    styles.buildingNameLabel,
+                    {
+                      left: building.x_pos * imageWidth,
+                      top: building.y_pos * imageHeight - 30,
+                      transform: [{ translateX: -30 }],
+                    },
+                  ]}
                 >
-                  <Ionicons name="business" size={12} color="#FAFAFA" />
-                </TouchableOpacity>
-              </Animated.View>
+                  <Text style={styles.buildingNameText} numberOfLines={1}>
+                    {building.name}
+                  </Text>
+                </View>
+                <Animated.View
+                  style={[
+                    styles.buildingMarker,
+                    {
+                      left: building.x_pos * imageWidth - 12,
+                      top: building.y_pos * imageHeight - 12,
+                      backgroundColor: building.color,
+                      transform: [{ scale: isSelected ? pulsingScale : 1 }],
+                    },
+                    destinationBuildingId === building.id && styles.destinationMarker,
+                    isSelected && styles.pulsingMarker,
+                  ]}
+                >
+                  <TouchableOpacity
+                    onPress={() => onBuildingPress?.(building)}
+                    style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Ionicons name="business" size={12} color="#FAFAFA" />
+                  </TouchableOpacity>
+                </Animated.View>
+              </React.Fragment>
             );
           })}
 
@@ -357,6 +379,22 @@ const styles = StyleSheet.create({
     color: '#FAFAFA',
     fontSize: 14,
     fontWeight: '600',
+  },
+  buildingNameLabel: {
+    position: 'absolute',
+    paddingHorizontal: 2,
+    paddingVertical: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  buildingNameText: {
+    color: '#FAFAFA',
+    fontSize: 9,
+    fontWeight: '600',
+    textAlign: 'center',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   noPathOverlay: {
     position: 'absolute',

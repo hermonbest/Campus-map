@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getCachedBuildingImage } from '../lib/cache';
 
 interface Office {
   id: string;
+  building_id: string;
   room_number: string;
   staff_name: string;
   floor: number | null;
@@ -30,6 +32,8 @@ interface Building {
   phone: string | null;
   email: string | null;
   hours: string | null;
+  x_pos: number;
+  y_pos: number;
   color: string;
   icon_type: string;
   entrance_node_id: string | null;
@@ -40,14 +44,29 @@ interface BuildingCardProps {
   building: Building | null;
   loading?: boolean;
   onClose: () => void;
+  onRouteToBuilding?: (building: Building) => void;
 }
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const CARD_HEIGHT = SCREEN_HEIGHT * 0.52;
 
-export default function BuildingCard({ building, loading = false, onClose }: BuildingCardProps) {
+export default function BuildingCard({ building, loading = false, onClose, onRouteToBuilding }: BuildingCardProps) {
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(CARD_HEIGHT)).current;
+  const [cachedImagePath, setCachedImagePath] = useState<string | null>(null);
+
+  // Load cached image when building changes
+  useEffect(() => {
+    if (building && building.image_url) {
+      getCachedBuildingImage(building.id).then(path => {
+        if (path) {
+          setCachedImagePath(path);
+        }
+      });
+    } else {
+      setCachedImagePath(null);
+    }
+  }, [building]);
 
   // Slide in when building is set, slide out when null
   useEffect(() => {
@@ -123,7 +142,7 @@ export default function BuildingCard({ building, loading = false, onClose }: Bui
             {/* Building Image */}
             {building.image_url && (
               <Image 
-                source={{ uri: building.image_url }} 
+                source={{ uri: cachedImagePath || building.image_url }} 
                 style={styles.buildingImage}
                 resizeMode="contain"
               />
@@ -136,9 +155,20 @@ export default function BuildingCard({ building, loading = false, onClose }: Bui
               <View style={styles.headerText}>
                 <Text style={styles.buildingName}>{building.name}</Text>
               </View>
-              <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                <Ionicons name="close" size={16} color="#71717A" />
-              </TouchableOpacity>
+              <View style={styles.headerActions}>
+                {onRouteToBuilding && building.entrance_node_id && (
+                  <TouchableOpacity 
+                    style={styles.goButton} 
+                    onPress={() => onRouteToBuilding(building)}
+                  >
+                    <Ionicons name="navigate" size={16} color="#FFFFFF" />
+                    <Text style={styles.goButtonText}>GO</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                  <Ionicons name="close" size={16} color="#71717A" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Details - Description, Hours, Phone, Email */}
@@ -284,6 +314,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 3,
     lineHeight: 18,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  goButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  goButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   closeButton: {
     width: 32,

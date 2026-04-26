@@ -22,6 +22,7 @@ interface Office {
   room_number: string;
   staff_name: string;
   floor: number | null;
+  is_frequent?: boolean; // Flag for main/frequently visited offices
 }
 
 interface Building {
@@ -37,6 +38,7 @@ interface Building {
   x_pos: number;
   y_pos: number;
   entrance_node_id: string | null;
+  is_frequent?: boolean; // Flag for frequently visited places
   offices?: Office[];
 }
 
@@ -68,8 +70,10 @@ interface DestinationPickerModalProps {
   offices: Office[];
   nodes: NavNode[];
   edges: NavEdge[];
-  /** The building flagged as "main entrance" on the map (entrance_node_id must be set) */
+  /** The building flagged as "main entrance" on the map (entrance_node_id must be set) - used as fallback */
   mainEntranceBuilding: Building | null;
+  /** The user's current closest node ID - used as start point for routing */
+  userStartNodeId: string | null;
   onRouteCalculated: (result: RouteResult) => void;
   onDismiss: () => void;
 }
@@ -83,6 +87,7 @@ export default function DestinationPickerModal({
   nodes,
   edges,
   mainEntranceBuilding,
+  userStartNodeId,
   onRouteCalculated,
   onDismiss,
 }: DestinationPickerModalProps) {
@@ -90,23 +95,33 @@ export default function DestinationPickerModal({
   const [calculating, setCalculating] = useState(false);
   const [expandedBuildingId, setExpandedBuildingId] = useState<string | null>(null);
 
+  // Determine start node: use user's location if available, otherwise fall back to main entrance
+  const startNodeId = userStartNodeId || mainEntranceBuilding?.entrance_node_id || null;
+  
+  // Determine if we're still waiting for location
+  const isWaitingForLocation = !userStartNodeId && mainEntranceBuilding?.entrance_node_id;
+
   // Only show buildings that:
-  //  a) are NOT the main entrance itself
+  //  a) are NOT the start building itself
   //  b) have an entrance node (so we can route to them)
+  //  c) are marked as frequent (is_frequent = true)
   const routableBuildings = useMemo(
     () =>
       buildings.filter(
-        (b) => b.id !== mainEntranceBuilding?.id && b.entrance_node_id !== null
+        (b) => b.id !== mainEntranceBuilding?.id && b.entrance_node_id !== null && b.is_frequent === true
       ),
     [buildings, mainEntranceBuilding]
   );
 
-  // Map building_id → offices for quick lookup
+  // Map building_id → offices for quick lookup (only frequent offices)
   const officesByBuilding = useMemo(() => {
     const map: Record<string, Office[]> = {};
     for (const office of offices) {
-      if (!map[office.building_id]) map[office.building_id] = [];
-      map[office.building_id].push(office);
+      // Only include offices marked as frequent
+      if (office.is_frequent === true) {
+        if (!map[office.building_id]) map[office.building_id] = [];
+        map[office.building_id].push(office);
+      }
     }
     return map;
   }, [offices]);
@@ -114,7 +129,7 @@ export default function DestinationPickerModal({
   // ── Route calculation ────────────────────────────────────────────────────────
 
   const handleSelectBuilding = (building: Building) => {
-    if (!mainEntranceBuilding?.entrance_node_id) return;
+    if (!startNodeId) return;
     if (!building.entrance_node_id) return;
     calculate(building, undefined);
   };
@@ -122,18 +137,18 @@ export default function DestinationPickerModal({
   const handleSelectOffice = (office: Office) => {
     const destBuilding = buildings.find((b) => b.id === office.building_id);
     if (!destBuilding?.entrance_node_id) return;
-    if (!mainEntranceBuilding?.entrance_node_id) return;
+    if (!startNodeId) return;
     calculate(destBuilding, office);
   };
 
   const calculate = (destBuilding: Building, office?: Office) => {
-    if (!mainEntranceBuilding?.entrance_node_id) return;
+    if (!startNodeId) return;
 
     setCalculating(true);
 
     // Run Dijkstra synchronously (it's fast for small graphs)
     const result = dijkstra(
-      mainEntranceBuilding.entrance_node_id,
+      startNodeId,
       destBuilding.entrance_node_id!,
       nodes,
       edges
@@ -174,12 +189,23 @@ export default function DestinationPickerModal({
           <View>
             <Text style={styles.headerLabel}>CAMPUS NAVIGATOR</Text>
             <Text style={styles.headerTitle}>Where to?</Text>
-            {mainEntranceBuilding && (
+            {startNodeId && (
               <View style={styles.fromRow}>
-                <View style={[styles.fromDot, { backgroundColor: mainEntranceBuilding.color }]} />
-                <Text style={styles.fromText}>
-                  From: {mainEntranceBuilding.name}
-                </Text>
+                {isWaitingForLocation ? (
+                  <>
+                    <ActivityIndicator size="small" color="#3B82F6" />
+                    <Text style={styles.fromText}>
+                      Detecting your location...
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <View style={[styles.fromDot, { backgroundColor: '#3B82F6' }]} />
+                    <Text style={styles.fromText}>
+                      From: Your current location
+                    </Text>
+                  </>
+                )}
               </View>
             )}
           </View>
@@ -196,17 +222,17 @@ export default function DestinationPickerModal({
           </View>
         )}
 
-        {!mainEntranceBuilding && (
+        {!startNodeId && (
           <View style={styles.emptyState}>
             <Ionicons name="warning-outline" size={32} color="#71717A" />
             <Text style={styles.emptyText}>
-              No main entrance is set on the map.{'\n'}Please contact the administrator.
+              No start location available. Please enable location services.
             </Text>
           </View>
         )}
 
         {/* Destination list */}
-        {mainEntranceBuilding && (
+        {startNodeId && (
           <ScrollView
             style={styles.list}
             contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}

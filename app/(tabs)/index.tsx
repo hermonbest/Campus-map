@@ -7,8 +7,9 @@ import { MapViewer } from '../../components/MapViewer';
 import { SearchModal } from '../../components/SearchModal';
 import DestinationPickerModal, { RouteResult } from '../../components/DestinationPickerModal';
 import BuildingCard from '../../components/BuildingCard';
-import { getCachedMapImage, getMapUrl, cacheMapImage, getCachedItem, cacheData, checkVersion, clearCache, getCachedData, cacheAllData } from '../../lib/cache';
+import { getCachedMapImage, getMapUrl, cacheMapImage, getCachedItem, cacheData, checkVersion, clearCache, getCachedData, cacheAllData, cacheBuildingImages, cacheNoticeImages, cacheMapImageFile, getCachedMapImageFile, getCacheStatus } from '../../lib/cache';
 import { supabase } from '../../lib/supabase';
+import { dijkstra } from '../../lib/dijkstra';
 
 interface Building {
   id: string;
@@ -23,6 +24,7 @@ interface Building {
   color: string;
   icon_type: string;
   entrance_node_id: string | null;
+  is_frequent?: boolean; // Flag for frequently visited places
   offices?: Office[];
 }
 
@@ -32,6 +34,7 @@ interface Office {
   room_number: string;
   staff_name: string;
   floor: number | null;
+  is_frequent?: boolean; // Flag for main/frequently visited offices
 }
 
 interface Node {
@@ -71,12 +74,18 @@ export default function Index() {
   const [activeRoute, setActiveRoute] = useState<RouteResult | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
   const [cardLoading, setCardLoading] = useState(false);
+  const [userStartNodeId, setUserStartNodeId] = useState<string | null>(null);
 
-  // Always start routes from the building named exactly "main enterance"
+  // Always start routes from the building named exactly "main enterance" (fallback if no user location)
   const mainEntranceBuilding = useMemo(
     () => buildings.find((b) => b.name.toLowerCase() === 'main enterance') ?? null,
     [buildings]
   );
+
+  // Handle user location changes
+  const handleUserLocationChange = (nodeId: string | null) => {
+    setUserStartNodeId(nodeId);
+  };
 
   useEffect(() => {
     loadData();
@@ -117,7 +126,15 @@ export default function Index() {
         currentMapUrl = await getMapUrl();
         await cacheMapImage(currentMapUrl);
       }
-      setMapUrl(currentMapUrl);
+      
+      // Try to use cached map image file
+      const cachedMapPath = await getCachedMapImageFile();
+      if (cachedMapPath) {
+        console.log('[LOAD_DATA] Using cached map image file');
+        setMapUrl(cachedMapPath);
+      } else {
+        setMapUrl(currentMapUrl);
+      }
 
       // Try to load all data from cache first
       const cached = await getCachedData();
@@ -153,6 +170,12 @@ export default function Index() {
         }
         
         console.log(`[LOAD_DATA] Data sync complete. Buildings: ${freshData.buildings.length}, Offices: ${freshData.offices.length}, BuildingsWithOffices: ${withOffices?.length || 0}`);
+        
+        // Cache images in background
+        console.log('[LOAD_DATA] Starting image caching...');
+        cacheBuildingImages(freshData.buildings).catch(err => console.error('[LOAD_DATA] Failed to cache building images:', err));
+        cacheNoticeImages(freshData.notices).catch(err => console.error('[LOAD_DATA] Failed to cache notice images:', err));
+        cacheMapImageFile(currentMapUrl).catch(err => console.error('[LOAD_DATA] Failed to cache map image:', err));
       }
 
       // Show the destination picker once data is ready (only if no active route)
@@ -261,6 +284,51 @@ export default function Index() {
     }
   };
 
+  const handleRouteToBuilding = (building: Building) => {
+    // Close the building card
+    setSelectedBuilding(null);
+    
+    // Calculate route from user's current location to this building
+    if (!userStartNodeId) {
+      // No user location available, show error
+      setNoPathMessage('Location not available. Please enable location services.');
+      setDestinationBuildingId(building.id);
+      setPath(null);
+      return;
+    }
+
+    if (!building.entrance_node_id) {
+      setNoPathMessage('This building has no entrance node.');
+      setDestinationBuildingId(building.id);
+      setPath(null);
+      return;
+    }
+
+    // Calculate route using Dijkstra
+    const result = dijkstra(
+      userStartNodeId,
+      building.entrance_node_id,
+      nodes,
+      edges
+    );
+
+    if (result && result.path.length > 1) {
+      setPath(result.path);
+      setNoPathMessage(null);
+      setDestinationBuildingId(null);
+      setActiveRoute({
+        path: result.path,
+        totalDistance: result.totalDistance,
+        destinationBuilding: building,
+      });
+    } else {
+      // No path found
+      setPath(null);
+      setDestinationBuildingId(building.id);
+      setNoPathMessage(`No direct path to ${building.name}`);
+    }
+  };
+
   const handleSearchResultSelect = (building: Building, office?: Office) => {
     // 1. Center map on the selected building
     setCenterOnBuilding(building);
@@ -301,6 +369,8 @@ export default function Index() {
         destinationBuildingId={destinationBuildingId || undefined}
         noPathMessage={noPathMessage || undefined}
         centerOnBuilding={centerOnBuilding}
+        showUserLocation={true}
+        onUserLocationChange={handleUserLocationChange}
       />
 
       {/* Top bar: Where-to picker + Search button */}
@@ -364,6 +434,7 @@ export default function Index() {
         nodes={nodes}
         edges={edges}
         mainEntranceBuilding={mainEntranceBuilding}
+        userStartNodeId={userStartNodeId}
         onRouteCalculated={handleRouteCalculated}
         onDismiss={() => setDestinationPickerVisible(false)}
       />
@@ -380,6 +451,7 @@ export default function Index() {
         building={selectedBuilding}
         loading={cardLoading}
         onClose={() => setSelectedBuilding(null)}
+        onRouteToBuilding={handleRouteToBuilding}
       />
     </View>
   );

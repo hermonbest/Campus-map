@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { cacheMapImage, cacheAllData, getMapUrl } from '../lib/cache';
+import { cacheMapImage, cacheAllData, getMapUrl, cacheMapImageFile, getCachedData } from '../lib/cache';
 
 export default function LoadingScreen() {
   const router = useRouter();
@@ -27,7 +27,18 @@ export default function LoadingScreen() {
       setStatus('Downloading campus data...');
       setProgress(50);
       
-      await cacheAllData();
+      const data = await cacheAllData();
+      
+      setStatus('Caching images...');
+      setProgress(70);
+      
+      // Cache images in background
+      const { cacheBuildingImages, cacheNoticeImages } = await import('../lib/cache');
+      await Promise.all([
+        cacheMapImageFile(mapUrl).catch(err => console.error('[LOADING] Failed to cache map image:', err)),
+        cacheBuildingImages(data.buildings).catch(err => console.error('[LOADING] Failed to cache building images:', err)),
+        cacheNoticeImages(data.notices).catch(err => console.error('[LOADING] Failed to cache notice images:', err)),
+      ]);
       
       setStatus('Loading complete!');
       setProgress(100);

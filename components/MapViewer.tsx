@@ -1,8 +1,9 @@
 import React, { useRef, useEffect, useMemo } from 'react';
 import { View, Image, StyleSheet, useWindowDimensions, StatusBar, Platform, ScrollView, TouchableOpacity, Text } from 'react-native';
-import Svg, { Polyline, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Polyline, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import Animated, { useSharedValue, useAnimatedProps, withRepeat, withTiming, Easing, withSequence, runOnJS, withSpring } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { useUserLocation } from '../hooks/useUserLocation';
 
 const AnimatedPolyline = Animated.createAnimatedComponent(Polyline);
 
@@ -39,12 +40,24 @@ interface MapViewerProps {
   destinationBuildingId?: string; // Building ID to highlight when no path exists
   noPathMessage?: string; // Message to display when no path exists
   centerOnBuilding?: Building | null; // Building to center on with animation
+  showUserLocation?: boolean; // Enable real-time location tracking
+  onUserLocationChange?: (nodeId: string | null) => void; // Callback when user's closest node changes
 }
 
-export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes = [], destinationBuildingId, noPathMessage, centerOnBuilding }: MapViewerProps) {
+export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes = [], destinationBuildingId, noPathMessage, centerOnBuilding, showUserLocation = false, onUserLocationChange }: MapViewerProps) {
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const scrollViewRef = useRef<ScrollView>(null);
   const pulsingScale = useSharedValue(1);
+  
+  // Real-time location tracking
+  const { location: userLocation, isOnCampus } = useUserLocation(showUserLocation, nodes);
+
+  // Notify parent when user's closest node changes
+  useEffect(() => {
+    if (userLocation?.closestNodeId) {
+      onUserLocationChange?.(userLocation.closestNodeId);
+    }
+  }, [userLocation?.closestNodeId, onUserLocationChange]);
 
   const androidStatusBarHeight = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
   const availableHeight = SCREEN_HEIGHT - androidStatusBarHeight;
@@ -59,6 +72,14 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
     const middlePosition = (imageWidth - SCREEN_WIDTH) / 2;
     scrollViewRef.current?.scrollTo({ x: middlePosition, y: 0, animated: false });
   }, [imageWidth, SCREEN_WIDTH]);
+
+  // Center map on user's location when first detected
+  useEffect(() => {
+    if (userLocation && showUserLocation) {
+      const centerX = userLocation.x * imageWidth - SCREEN_WIDTH / 2;
+      scrollViewRef.current?.scrollTo({ x: centerX, y: 0, animated: true });
+    }
+  }, [userLocation?.x, showUserLocation, imageWidth, SCREEN_WIDTH]);
 
   // Center on building when centerOnBuilding prop changes
   useEffect(() => {
@@ -248,6 +269,33 @@ export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes
             );
           })}
 
+          {/* User location marker */}
+          {showUserLocation && userLocation && (
+            <>
+              {/* Pulsing outer ring */}
+              <View
+                style={[
+                  styles.userLocationOuter,
+                  {
+                    left: userLocation.x * imageWidth - 20,
+                    top: userLocation.y * imageHeight - 20,
+                  },
+                ]}
+              />
+              {/* Inner dot */}
+              <View
+                style={[
+                  styles.userLocationInner,
+                  {
+                    left: userLocation.x * imageWidth - 8,
+                    top: userLocation.y * imageHeight - 8,
+                    backgroundColor: isOnCampus ? '#3482ff' : '#EF4444',
+                  },
+                ]}
+              />
+            </>
+          )}
+
           {/* No-path message overlay */}
           {noPathMessage && destinationBuildingId && (
             <View style={styles.noPathOverlay}>
@@ -329,5 +377,29 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     letterSpacing: -0.2,
+  },
+  userLocationOuter: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userLocationInner: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
 });

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getCachedData, cacheAllData, clearCache, checkVersion } from '../../lib/cache';
+import { getCachedData, cacheAllData, clearCache, checkVersion, getCachedNoticeImage } from '../../lib/cache';
 import NoticeDetailModal from '../../components/NoticeDetailModal';
 
 interface Notice {
@@ -25,6 +25,27 @@ export default function Notices() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
+  const [cachedImagePaths, setCachedImagePaths] = useState<Record<string, string>>({});
+
+  // Load cached image paths when notices change
+  useEffect(() => {
+    const loadCachedImages = async () => {
+      const paths: Record<string, string> = {};
+      for (const notice of notices) {
+        if (notice.image_url) {
+          const path = await getCachedNoticeImage(notice.id);
+          if (path) {
+            paths[notice.id] = path;
+          }
+        }
+      }
+      setCachedImagePaths(paths);
+    };
+    
+    if (notices.length > 0) {
+      loadCachedImages();
+    }
+  }, [notices]);
 
   useEffect(() => {
     loadData();
@@ -138,7 +159,7 @@ export default function Notices() {
             >
               {notice.image_url && (
                 <Image
-                  source={{ uri: notice.image_url }}
+                  source={{ uri: cachedImagePaths[notice.id] || notice.image_url }}
                   style={styles.noticeImage}
                   resizeMode="cover"
                 />

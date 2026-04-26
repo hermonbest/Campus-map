@@ -57,7 +57,7 @@ export default function RouteScreen() {
   const [selectedStartBuilding, setSelectedStartBuilding] = useState<Building | null>(null);
   const [selectedDestinationOffice, setSelectedDestinationOffice] = useState<Office | null>(null);
   const [selectedDestinationBuilding, setSelectedDestinationBuilding] = useState<Building | null>(null);
-  const [destinationType, setDestinationType] = useState<'office' | 'building'>('office');
+  const [destinationType, setDestinationType] = useState<'office' | 'building'>('building');
   const [loading, setLoading] = useState(true);
   const [calculating, setCalculating] = useState(false);
   const [path, setPath] = useState<string[] | null>(null);
@@ -255,21 +255,6 @@ export default function RouteScreen() {
             <TouchableOpacity
               style={[
                 styles.typeButton,
-                destinationType === 'office' && styles.selectedTypeButton,
-              ]}
-              onPress={() => {
-                setDestinationType('office');
-                setSelectedDestinationBuilding(null);
-              }}
-            >
-              <Text style={[
-                styles.typeButtonText,
-                destinationType === 'office' && styles.selectedTypeButtonText,
-              ]}>Office</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.typeButton,
                 destinationType === 'building' && styles.selectedTypeButton,
               ]}
               onPress={() => {
@@ -282,7 +267,22 @@ export default function RouteScreen() {
                 destinationType === 'building' && styles.selectedTypeButtonText,
               ]}>Building</Text>
             </TouchableOpacity>
-          </View>
+            <TouchableOpacity
+              style={[
+                styles.typeButton,
+                destinationType === 'office' && styles.selectedTypeButton,
+              ]}
+              onPress={() => {
+                setDestinationType('office');
+                setSelectedDestinationBuilding(null);
+              }}
+            >
+              <Text style={[
+                styles.typeButtonText,
+                destinationType === 'office' && styles.selectedTypeButtonText,
+              ]}>Office</Text>
+            </TouchableOpacity>
+        </View>
         </View>
 
         {/* Destination Selection */}

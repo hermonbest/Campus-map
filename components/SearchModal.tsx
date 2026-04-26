@@ -51,12 +51,20 @@ interface SearchModalProps {
   onClose: () => void;
   buildings: Building[];
   onSelect: (building: Building, office?: Office) => void;
+  initialQuery?: string;
 }
 
-export function SearchModal({ visible, onClose, buildings, onSelect }: SearchModalProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+export function SearchModal({ visible, onClose, buildings, onSelect, initialQuery = '' }: SearchModalProps) {
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Update search query when initialQuery changes (e.g., when modal opens)
+  useEffect(() => {
+    if (visible) {
+      setSearchQuery(initialQuery);
+    }
+  }, [visible, initialQuery]);
 
   useEffect(() => {
     if (searchQuery.trim() === '') {

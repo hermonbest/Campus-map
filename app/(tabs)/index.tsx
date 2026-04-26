@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, TextInput } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MapViewer } from '../../components/MapViewer';
 import { SearchModal } from '../../components/SearchModal';
 import DestinationPickerModal, { RouteResult } from '../../components/DestinationPickerModal';
@@ -75,6 +76,8 @@ export default function Index() {
   const [cardExpanded, setCardExpanded] = useState(false);
   const [cardLoading, setCardLoading] = useState(false);
   const [userStartNodeId, setUserStartNodeId] = useState<string | null>(null);
+  const [hasSeenDestinationPicker, setHasSeenDestinationPicker] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Always start routes from the building named exactly "main enterance" (fallback if no user location)
   const mainEntranceBuilding = useMemo(
@@ -90,7 +93,20 @@ export default function Index() {
   useEffect(() => {
     loadData();
     checkForUpdates();
+    checkFirstLaunch();
   }, []);
+
+  const checkFirstLaunch = async () => {
+    try {
+      const hasSeen = await AsyncStorage.getItem('@campus_map:hasSeenDestinationPicker');
+      setHasSeenDestinationPicker(hasSeen === 'true');
+      if (hasSeen === 'true') {
+        setDestinationPickerVisible(false);
+      }
+    } catch (error) {
+      console.error('Error checking first launch:', error);
+    }
+  };
 
   // Handle path parameters from route screen
   useEffect(() => {
@@ -167,16 +183,13 @@ export default function Index() {
         }
         
         console.log(`[LOAD_DATA] Data sync complete. Buildings: ${freshData.buildings.length}, Offices: ${freshData.offices.length}, BuildingsWithOffices: ${withOffices?.length || 0}`);
-        
+
         // Cache images in background
         console.log('[LOAD_DATA] Starting image caching...');
         cacheBuildingImages(freshData.buildings).catch(err => console.error('[LOAD_DATA] Failed to cache building images:', err));
         cacheNoticeImages(freshData.notices).catch(err => console.error('[LOAD_DATA] Failed to cache notice images:', err));
         cacheMapImageFile(currentMapUrl).catch(err => console.error('[LOAD_DATA] Failed to cache map image:', err));
       }
-
-      // Show the destination picker once data is ready (only if no active route)
-      setDestinationPickerVisible(true);
     } catch (error) {
       console.error('Error loading campus data:', error);
     }
@@ -263,9 +276,17 @@ export default function Index() {
     router.setParams({});
   };
 
-  const handleRouteCalculated = (result: RouteResult) => {
+  const handleRouteCalculated = async (result: RouteResult) => {
     setDestinationPickerVisible(false);
     setActiveRoute(result);
+
+    // Save that user has seen the destination picker
+    try {
+      await AsyncStorage.setItem('@campus_map:hasSeenDestinationPicker', 'true');
+      setHasSeenDestinationPicker(true);
+    } catch (error) {
+      console.error('Error saving first launch flag:', error);
+    }
 
     if (result.path.length > 1) {
       setPath(result.path);
@@ -328,6 +349,7 @@ export default function Index() {
     // 1. Center map on the selected building
     setCenterOnBuilding(building);
     setSearchModalVisible(false);
+    setSearchQuery('');
 
     // 2. Open the building details card in expanded mode
     setCardExpanded(true);
@@ -335,6 +357,16 @@ export default function Index() {
 
     // 3. Clear centering after animation
     setTimeout(() => setCenterOnBuilding(null), 2000);
+  };
+
+  const handleSearchFocus = () => {
+    setSearchModalVisible(true);
+  };
+
+  const handleSearchBarPress = () => {
+    if (activeRoute) {
+      handleClearRoute();
+    }
   };
 
   return (
@@ -352,33 +384,37 @@ export default function Index() {
         onUserLocationChange={handleUserLocationChange}
       />
 
-      {/* Top bar: Where-to picker + Search button */}
+      {/* Top bar: Full-width search input */}
       <View style={[styles.floatingControls, { top: insets.top + 10 }]}>
-        {/* Destination picker trigger */}
         <TouchableOpacity
           style={styles.searchBarContainer}
-          onPress={() => setDestinationPickerVisible(true)}
+          onPress={handleSearchBarPress}
           activeOpacity={0.8}
         >
-          <Ionicons name="navigate" size={18} color="#A1A1AA" style={{ marginRight: 10 }} />
+          <Ionicons name="search" size={18} color="#A1A1AA" style={{ marginRight: 10 }} />
           {activeRoute ? (
-            <Text style={styles.searchBarText} numberOfLines={1}>
-              → {activeRoute.destinationOffice
-                ? `${activeRoute.destinationOffice.staff_name} (${activeRoute.destinationOffice.room_number})`
-                : activeRoute.destinationBuilding.name}
-            </Text>
+            <View style={styles.searchBarContent}>
+              <Text style={styles.searchBarText} numberOfLines={1}>
+                → {activeRoute.destinationOffice
+                  ? `${activeRoute.destinationOffice.staff_name} (${activeRoute.destinationOffice.room_number})`
+                  : activeRoute.destinationBuilding.name}
+              </Text>
+              <TouchableOpacity onPress={handleClearRoute} style={styles.clearButton}>
+                <Ionicons name="close-circle" size={18} color="#A1A1AA" />
+              </TouchableOpacity>
+            </View>
           ) : (
-            <Text style={styles.searchBarText}>Where to?</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search buildings or offices..."
+              placeholderTextColor="#A1A1AA"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={handleSearchFocus}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           )}
-        </TouchableOpacity>
-
-        {/* Search button */}
-        <TouchableOpacity
-          style={styles.searchIconButton}
-          onPress={() => setSearchModalVisible(true)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="search" size={20} color="#FAFAFA" />
         </TouchableOpacity>
       </View>
 
@@ -415,7 +451,16 @@ export default function Index() {
         mainEntranceBuilding={mainEntranceBuilding}
         userStartNodeId={userStartNodeId}
         onRouteCalculated={handleRouteCalculated}
-        onDismiss={() => setDestinationPickerVisible(false)}
+        onDismiss={async () => {
+          setDestinationPickerVisible(false);
+          // Save that user has seen the destination picker
+          try {
+            await AsyncStorage.setItem('@campus_map:hasSeenDestinationPicker', 'true');
+            setHasSeenDestinationPicker(true);
+          } catch (error) {
+            console.error('Error saving first launch flag:', error);
+          }
+        }}
       />
 
       <SearchModal
@@ -423,6 +468,7 @@ export default function Index() {
         onClose={() => setSearchModalVisible(false)}
         buildings={buildingsWithOffices}
         onSelect={handleSearchResultSelect}
+        initialQuery={searchQuery}
       />
 
       {/* Building details bottom-sheet card */}
@@ -454,9 +500,6 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     zIndex: 100,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
   },
   searchBarContainer: {
     flex: 1,
@@ -474,26 +517,26 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 10,
   },
+  searchBarContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   searchBarText: {
     color: '#A1A1AA',
     fontSize: 15,
     fontWeight: '500',
     flex: 1,
   },
-  searchIconButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 20,
-    backgroundColor: 'rgba(24, 24, 27, 0.75)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 10,
+  clearButton: {
+    marginLeft: 10,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#FAFAFA',
+    fontSize: 15,
+    fontWeight: '500',
   },
   floatingRefreshButton: {
     position: 'absolute',

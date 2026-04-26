@@ -42,15 +42,16 @@ interface MapViewerProps {
   centerOnBuilding?: Building | null; // Building to center on with animation
   showUserLocation?: boolean; // Enable real-time location tracking
   onUserLocationChange?: (nodeId: string | null) => void; // Callback when user's closest node changes
+  isOnRoute?: boolean; // Whether user is currently following a route
 }
 
-export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes = [], destinationBuildingId, noPathMessage, centerOnBuilding, showUserLocation = false, onUserLocationChange }: MapViewerProps) {
+export function MapViewer({ mapUrl, buildings = [], onBuildingPress, path, nodes = [], destinationBuildingId, noPathMessage, centerOnBuilding, showUserLocation = false, onUserLocationChange, isOnRoute = false }: MapViewerProps) {
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const scrollViewRef = useRef<ScrollView>(null);
   const pulsingScale = useSharedValue(1);
   
   // Real-time location tracking
-  const { location: userLocation, isOnCampus } = useUserLocation(showUserLocation, nodes);
+  const { location: userLocation, isOnCampus } = useUserLocation(showUserLocation, nodes, isOnRoute, path);
 
   // Notify parent when user's closest node changes
   useEffect(() => {

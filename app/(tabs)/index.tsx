@@ -382,6 +382,7 @@ export default function Index() {
         centerOnBuilding={centerOnBuilding}
         showUserLocation={true}
         onUserLocationChange={handleUserLocationChange}
+        isOnRoute={!!path}
       />
 
       {/* Top bar: Full-width search input */}

@@ -87,11 +87,11 @@ export function useUserLocation(enabled: boolean = true, nodes?: Array<{ id: str
   const previousPositionRef = useRef<{ x: number; y: number } | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
   const updateCountRef = useRef<number>(0);
-  const smoothingFactor = 0.1; // Lower = more smoothing (0.1-0.5 recommended)
+  const smoothingFactor = 0.25; // Increased from 0.1 for better responsiveness
   const maxJumpDistance = 0.05; // Maximum allowed jump in map coordinates (0-1)
-  const minUpdateInterval = 500; // Minimum time between location updates in milliseconds (reduced from 1500ms)
-  const initialUpdatesToSkipSmoothing = 5; // Skip smoothing for first N updates to allow quick convergence
-  const maxAccuracyThreshold = 50; // Maximum GPS accuracy in meters to accept (ignore worse readings)
+  const minUpdateInterval = 500; // Minimum time between location updates in milliseconds
+  const initialUpdatesToSkipSmoothing = 3; // Reduced from 5 to get accurate position faster
+  const maxAccuracyThreshold = 60; // Slightly increased to allow indoor readings which are often less accurate
 
   useEffect(() => {
     if (!enabled) {
@@ -115,21 +115,18 @@ export function useUserLocation(enabled: boolean = true, nodes?: Array<{ id: str
 
       // Skip update if not enough time has passed (unless it's the first update)
       if (lastUpdateTimeRef.current > 0 && timeSinceLastUpdate < minUpdateInterval) {
-        console.log(`[LOCATION] Update skipped - too soon (${timeSinceLastUpdate}ms < ${minUpdateInterval}ms)`);
         return;
       }
 
       const { latitude, longitude, accuracy } = locationData.coords;
       
-      // Skip updates with poor GPS accuracy (unless it's the first update)
+      // Skip updates with extremely poor GPS accuracy (unless it's the first update)
       if (accuracy && accuracy > maxAccuracyThreshold && updateCountRef.current > 0) {
         console.log(`[LOCATION] Update skipped - poor accuracy (${accuracy}m > ${maxAccuracyThreshold}m)`);
         return;
       }
       
       const mapPosition = gpsToMapPosition(latitude, longitude);
-      
-      console.log(`[LOCATION] Update #${updateCountRef.current + 1} - GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} | Accuracy: ${accuracy}m | Map: ${mapPosition.x.toFixed(4)}, ${mapPosition.y.toFixed(4)}`);
       
       const closestNode = nodes ? findClosestNode(mapPosition.x, mapPosition.y, nodes) : null;
       
@@ -148,55 +145,51 @@ export function useUserLocation(enabled: boolean = true, nodes?: Array<{ id: str
         if (projectedPoint) {
           displayX = projectedPoint.x;
           displayY = projectedPoint.y;
-          console.log(`[LOCATION] Path projection: ${mapPosition.x.toFixed(4)}, ${mapPosition.y.toFixed(4)} -> ${displayX.toFixed(4)}, ${displayY.toFixed(4)}`);
         }
-      } else if (!isOnRoute) {
-        // When not on route, snap to closest node for stable location display
-        displayX = closestNode ? Number(closestNode.x_pos) : mapPosition.x;
-        displayY = closestNode ? Number(closestNode.y_pos) : mapPosition.y;
-        console.log(`[LOCATION] Snap to node: ${closestNode?.id || 'none'} at ${displayX.toFixed(4)}, ${displayY.toFixed(4)}`);
+      } else {
+        // REMOVED: Snapping to node when not on route. 
+        // This was likely causing the 10-15m error indoors.
+        // We now use the raw GPS map position for better accuracy.
+        displayX = mapPosition.x;
+        displayY = mapPosition.y;
       }
 
-      // Apply smoothing to prevent jumps (skip for first few updates to allow quick convergence)
+      // Apply smoothing to prevent jitter (skip for first few updates for quick convergence)
       const previousPos = previousPositionRef.current;
       const shouldSkipSmoothing = updateCountRef.current < initialUpdatesToSkipSmoothing;
       
-      console.log(`[LOCATION] Smoothing: ${shouldSkipSmoothing ? 'SKIPPED' : 'APPLIED'} (update #${updateCountRef.current + 1}/${initialUpdatesToSkipSmoothing})`);
-      
-      if (previousPos && isOnRoute && !shouldSkipSmoothing) {
-        // Calculate distance from previous position
+      if (previousPos && !shouldSkipSmoothing) {
+        // Dynamic smoothing: trust high-accuracy readings more
+        let dynamicSmoothing = smoothingFactor;
+        
+        if (accuracy) {
+          if (accuracy < 10) {
+            dynamicSmoothing = 0.5; // Very accurate, move marker quickly
+          } else if (accuracy > 30) {
+            dynamicSmoothing = 0.1; // Low accuracy (indoors), move marker slowly to filter jitter
+          }
+        }
+
+        // Apply smoothing (interpolate between previous and new position)
+        displayX = previousPos.x + (displayX - previousPos.x) * dynamicSmoothing;
+        displayY = previousPos.y + (displayY - previousPos.y) * dynamicSmoothing;
+        
+        // Final sanity check: if the movement is tiny (less than 0.1% of map), don't move
+        // This prevents the marker from "vibrating" when the user is standing still
         const dx = displayX - previousPos.x;
         const dy = displayY - previousPos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        console.log(`[LOCATION] Distance from previous: ${distance.toFixed(4)}`);
-        
-        // If jump is too large, clamp it
-        if (distance > maxJumpDistance) {
-          const ratio = maxJumpDistance / distance;
-          displayX = previousPos.x + dx * ratio;
-          displayY = previousPos.y + dy * ratio;
-          console.log(`[LOCATION] Jump clamped from ${distance.toFixed(4)} to ${maxJumpDistance}`);
+        if (Math.sqrt(dx * dx + dy * dy) < 0.001 && updateCountRef.current > 10) {
+          displayX = previousPos.x;
+          displayY = previousPos.y;
         }
-        
-        // Apply smoothing (interpolate between previous and new position)
-        const beforeX = displayX;
-        const beforeY = displayY;
-        displayX = previousPos.x + (displayX - previousPos.x) * smoothingFactor;
-        displayY = previousPos.y + (displayY - previousPos.y) * smoothingFactor;
-        console.log(`[LOCATION] Smoothed: ${beforeX.toFixed(4)}, ${beforeY.toFixed(4)} -> ${displayX.toFixed(4)}, ${displayY.toFixed(4)}`);
       }
       
-      // Update previous position
+      // Update refs
       previousPositionRef.current = { x: displayX, y: displayY };
-      
-      // Update last update time
       lastUpdateTimeRef.current = now;
-      
-      // Increment update count
       updateCountRef.current++;
 
-      console.log(`[LOCATION] Final position: ${displayX.toFixed(4)}, ${displayY.toFixed(4)} | Closest node: ${closestNode?.id || 'none'}`);
+      console.log(`[LOCATION] Final: ${displayX.toFixed(4)}, ${displayY.toFixed(4)} | Accuracy: ${accuracy}m | Smoothing: ${shouldSkipSmoothing ? 'none' : 'applied'}`);
 
       setLocation({
         x: displayX,
@@ -223,18 +216,20 @@ export function useUserLocation(enabled: boolean = true, nodes?: Array<{ id: str
 
         setPermissionGranted(true);
 
-        // Get last known position immediately (cached, fast)
-        const lastKnown = await Location.getLastKnownPositionAsync();
+        // Get last known position immediately
+        const lastKnown = await Location.getLastKnownPositionAsync({
+          maxAge: 10000, // Accept cached location up to 10s old
+        });
         if (lastKnown && mounted) {
           updateLocationState(lastKnown);
         }
 
-        // Start watching position changes immediately
+        // Start watching position changes with higher precision
         const subscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.High,
-            distanceInterval: 5, // Update every 5 meters
-            timeInterval: 3000, // Or every 3 seconds
+            accuracy: Location.Accuracy.BestForNavigation, // Increased from High
+            distanceInterval: 1, // Reduced from 5 meters for more frequent updates
+            timeInterval: 1000, // Reduced from 3000ms
           },
           (position) => {
             if (mounted) updateLocationState(position);

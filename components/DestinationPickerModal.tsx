@@ -13,34 +13,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dijkstra } from '../lib/dijkstra';
+import { Building, Office } from '../lib/types';
 
 // ─── Interfaces ────────────────────────────────────────────────────────────────
-
-interface Office {
-  id: string;
-  building_id: string;
-  room_number: string;
-  staff_name: string;
-  floor: number | null;
-  is_frequent?: boolean; // Flag for main/frequently visited offices
-}
-
-interface Building {
-  id: string;
-  name: string;
-  description: string | null;
-  image_url?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  hours?: string | null;
-  color: string;
-  icon_type: string;
-  x_pos: number;
-  y_pos: number;
-  entrance_node_id: string | null;
-  is_frequent?: boolean; // Flag for frequently visited places
-  offices?: Office[];
-}
 
 interface NavNode {
   id: string;

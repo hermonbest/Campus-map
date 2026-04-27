@@ -7,50 +7,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MapViewer } from '../../components/MapViewer';
 import DestinationPickerModal, { RouteResult } from '../../components/DestinationPickerModal';
 import BuildingCard from '../../components/BuildingCard';
+import ArrivalToast from '../../components/ArrivalToast';
 import { getCachedMapImage, getMapUrl, cacheMapImage, getCachedItem, cacheData, checkVersion, clearCache, getCachedData, cacheAllData, cacheBuildingImages, cacheNoticeImages, cacheMapImageFile, getCachedMapImageFile, getCacheStatus } from '../../lib/cache';
 import { supabase } from '../../lib/supabase';
 import { dijkstra } from '../../lib/dijkstra';
-
-interface Building {
-  id: string;
-  name: string;
-  description: string | null;
-  image_url: string | null;
-  phone: string | null;
-  email: string | null;
-  hours: string | null;
-  x_pos: number;
-  y_pos: number;
-  color: string;
-  icon_type: string;
-  entrance_node_id: string | null;
-  is_frequent?: boolean; // Flag for frequently visited places
-  offices?: Office[];
-}
-
-interface Office {
-  id: string;
-  building_id: string;
-  room_number: string;
-  staff_name: string;
-  floor: number | null;
-  is_frequent?: boolean; // Flag for main/frequently visited offices
-}
-
-interface Node {
-  id: string;
-  x_pos: number;
-  y_pos: number;
-  is_building_entrance: boolean;
-  building_id: string | null;
-}
-
-interface Edge {
-  id: string;
-  node_a: string;
-  node_b: string;
-  weight: number;
-}
+import { Building, Office, Node, Edge } from '../../lib/types';
 
 export default function Index() {
   const router = useRouter();
@@ -78,6 +39,8 @@ export default function Index() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [arrivalToastVisible, setArrivalToastVisible] = useState(false);
+  const [arrivalTriggered, setArrivalTriggered] = useState(false);
 
   // Always start routes from the building named exactly "main enterance" (fallback if no user location)
   const mainEntranceBuilding = useMemo(
@@ -88,6 +51,20 @@ export default function Index() {
   // Handle user location changes
   const handleUserLocationChange = (nodeId: string | null) => {
     setUserStartNodeId(nodeId);
+
+    // Check if user has arrived at destination
+    if (nodeId && activeRoute && !arrivalTriggered) {
+      const destinationNodeId = activeRoute.destinationBuilding.entrance_node_id;
+      if (nodeId === destinationNodeId) {
+        // User has arrived at destination
+        setArrivalTriggered(true);
+        setArrivalToastVisible(true);
+        
+        // Auto-open building details in expanded state
+        handleBuildingPress(activeRoute.destinationBuilding);
+        setCardExpanded(true);
+      }
+    }
   };
 
   useEffect(() => {
@@ -273,6 +250,8 @@ export default function Index() {
     setActiveRoute(null);
     setDestinationBuildingId(null);
     setNoPathMessage(null);
+    setArrivalTriggered(false);
+    setArrivalToastVisible(false);
     router.setParams({});
   };
 
@@ -570,6 +549,13 @@ export default function Index() {
             console.error('Error saving first launch flag:', error);
           }
         }}
+      />
+
+      {/* Arrival toast notification */}
+      <ArrivalToast
+        visible={arrivalToastVisible}
+        destinationName={activeRoute?.destinationBuilding.name || ''}
+        onDismiss={() => setArrivalToastVisible(false)}
       />
 
       {/* Building details bottom-sheet card */}

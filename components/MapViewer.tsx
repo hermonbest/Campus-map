@@ -4,32 +4,9 @@ import Svg, { Polyline, Defs, LinearGradient, Stop, Circle } from 'react-native-
 import Animated, { useSharedValue, useAnimatedProps, withRepeat, withTiming, Easing, withSequence, runOnJS, withSpring } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserLocation } from '../hooks/useUserLocation';
+import { Building, Office } from '../lib/types';
 
 const AnimatedPolyline = Animated.createAnimatedComponent(Polyline);
-
-interface Building {
-  id: string;
-  name: string;
-  description: string | null;
-  image_url: string | null;
-  phone: string | null;
-  email: string | null;
-  hours: string | null;
-  x_pos: number;
-  y_pos: number;
-  color: string;
-  icon_type: string;
-  entrance_node_id: string | null;
-  offices?: Office[];
-}
-
-interface Office {
-  id: string;
-  building_id: string;
-  room_number: string;
-  staff_name: string;
-  floor: number | null;
-}
 
 interface MapViewerProps {
   mapUrl: string | null;

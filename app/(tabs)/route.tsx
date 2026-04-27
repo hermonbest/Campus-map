@@ -5,47 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getCachedData, cacheAllData } from '../../lib/cache';
 import { useFocusEffect } from '@react-navigation/native';
 import { dijkstra } from '../../lib/dijkstra';
-
-interface Building {
-  id: string;
-  name: string;
-  description: string | null;
-  x_pos: number;
-  y_pos: number;
-  color: string;
-  icon_type: string;
-  entrance_node_id: string | null;
-  offices?: Array<{
-    id: string;
-    room_number: string;
-    staff_name: string;
-    floor: number | null;
-  }>;
-}
-
-interface Office {
-  id: string;
-  building_id: string;
-  room_number: string;
-  staff_name: string;
-  floor: number | null;
-  building?: Building;
-}
-
-interface Node {
-  id: string;
-  x_pos: number;
-  y_pos: number;
-  is_building_entrance: boolean;
-  building_id: string | null;
-}
-
-interface Edge {
-  id: string;
-  node_a: string;
-  node_b: string;
-  weight: number;
-}
+import { Building, Office, Node, Edge } from '../../lib/types';
 
 export default function RouteScreen() {
   const router = useRouter();

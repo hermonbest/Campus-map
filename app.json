@@ -7,7 +7,7 @@
     "icon": "./assets/Applogo.png",
     "scheme": "kuecampusmap",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.kue.campusmap"
@@ -38,6 +38,16 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "abiFilters": ["arm64-v8a"],
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableProguardInReleaseBuilds": true
+          }
+        }
+      ],
       [
         "expo-splash-screen",
         {

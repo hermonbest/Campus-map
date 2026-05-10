@@ -7,7 +7,7 @@
     "icon": "./assets/Applogo.png",
     "scheme": "kuecampusmap",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.kue.campusmap"
@@ -25,12 +25,7 @@
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
-      ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "PASTE_YOUR_GOOGLE_MAPS_API_KEY_HERE"
-        }
-      }
+      ]
     },
     "web": {
       "output": "static",
@@ -42,9 +37,12 @@
         "expo-build-properties",
         {
           "android": {
-            "abiFilters": ["arm64-v8a"],
+            "abiFilters": [
+              "arm64-v8a"
+            ],
             "enableShrinkResourcesInReleaseBuilds": true,
-            "enableProguardInReleaseBuilds": true
+            "enableProguardInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true
           }
         }
       ],
@@ -76,8 +74,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ef6473c1-4f24-447d-9a8f-70bcc06b01de"
+        "projectId": "4afe6b4e-90f0-4bc2-9bf6-25660bb5df7e"
       }
-    }
+    },
+    "owner": "mikiyas32"
   }
 }
